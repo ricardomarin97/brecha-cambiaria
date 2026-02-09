@@ -206,13 +206,28 @@ def refresh_prices():
 
 def parse_iso_datetime(date_string):
     """Parsea fecha ISO, manejando el sufijo Z de UTC. Devuelve datetime naive."""
-    if date_string.endswith('Z'):
-        date_string = date_string[:-1]
-    dt = datetime.fromisoformat(date_string)
-    # Remover timezone para comparar con fechas naive del historial
-    if dt.tzinfo is not None:
-        dt = dt.replace(tzinfo=None)
-    return dt
+    try:
+        # Remover sufijo Z si existe
+        if date_string.endswith('Z'):
+            date_string = date_string[:-1]
+
+        # Remover offset de timezone si existe (ej: +00:00, -04:00)
+        if '+' in date_string[10:]:
+            date_string = date_string[:date_string.rfind('+')]
+        elif date_string[10:].count('-') > 0:
+            # Buscar el ultimo guion que sea parte del offset (no de la fecha)
+            last_dash = date_string.rfind('-')
+            if last_dash > 10:
+                date_string = date_string[:last_dash]
+
+        dt = datetime.fromisoformat(date_string)
+        # Asegurar que sea naive (sin timezone)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return dt
+    except Exception as e:
+        print(f"Error parseando fecha '{date_string}': {e}")
+        return datetime.now()
 
 @app.route('/api/history')
 def get_history():
