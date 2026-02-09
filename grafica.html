@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Monitor de Precios en Tiempo Real</title>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f0f2f5; color: #333; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .controls { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 25px; align-items: flex-end; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        input, select, button { padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; transition: 0.3s; }
+        button:hover { background-color: #0056b3; }
+        #chart { min-height: 400px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Historial de Precios y Brechas</h2>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label>1. Cargar JSON:</label>
+            <input type="file" id="upload" accept=".json">
+        </div>
+        <div class="control-group">
+            <label>2. Métrica:</label>
+            <select id="metric">
+                <option value="usdt_avg">USDT Promedio</option>
+                <option value="bcv_usd">BCV USD</option>
+                <option value="bcv_eur">BCV EUR</option>
+                <option value="brecha_usdt_usd">Brecha USDT/USD (%)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Desde:</label>
+            <input type="date" id="start">
+        </div>
+        <div class="control-group">
+            <label>Hasta:</label>
+            <input type="date" id="end">
+        </div>
+        <button onclick="procesarDatos()">Aplicar Filtros</button>
+    </div>
+
+    <div id="chart"></div>
+</div>
+
+<script>
+    let rawData = [];
+    let chart;
+
+    // Inicializar gráfica vacía
+    const options = {
+        chart: { type: 'area', height: 400, animations: { enabled: false }, zoom: { enabled: true } },
+        stroke: { curve: 'smooth', width: 2 },
+        series: [{ name: 'Valor', data: [] }],
+        xaxis: { type: 'datetime', labels: { datetimeUTC: false } },
+        tooltip: { x: { format: 'dd MMM HH:mm:ss' } },
+        dataLabels: { enabled: false },
+        colors: ['#007bff']
+    };
+
+    chart = new ApexCharts(document.querySelector("#chart"), options);
+    chart.render();
+
+    // Manejar carga de archivo
+    document.getElementById('upload').addEventListener('change', function(e) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                rawData = JSON.parse(event.target.result);
+                procesarDatos();
+            } catch (err) {
+                alert("Error al leer el JSON. Verifica el formato.");
+            }
+        };
+        reader.readAsText(e.target.files[0]);
+    });
+
+    function procesarDatos() {
+        if (rawData.length === 0) return;
+
+        const metric = document.getElementById('metric').value;
+        const startFilter = document.getElementById('start').value;
+        const endFilter = document.getElementById('end').value;
+
+        // Convertir y filtrar
+        let filtered = rawData.map(item => ({
+            x: new Date(item.timestamp).getTime(),
+            y: parseFloat(item[metric])
+        }));
+
+        if (startFilter) {
+            const startTime = new Date(startFilter).getTime();
+            filtered = filtered.filter(d => d.x >= startTime);
+        }
+        if (endFilter) {
+            const endTime = new Date(endFilter).getTime() + 86400000; // Incluir el día completo
+            filtered = filtered.filter(d => d.x <= endTime);
+        }
+
+        // Ordenar por tiempo por si el JSON viene desordenado
+        filtered.sort((a, b) => a.x - b.x);
+
+        chart.updateSeries([{
+            name: metric.toUpperCase().replace('_', ' '),
+            data: filtered
+        }]);
+    }
+</script>
+
+</body>
+</html>
