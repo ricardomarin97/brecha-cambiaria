@@ -6,6 +6,7 @@
     <title>Brecha Cambiaria Venezuela - USDT vs BCV</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <style>
       * {
         margin: 0;
@@ -35,9 +36,7 @@
       h1 {
         font-size: 2.5rem;
         margin-bottom: 10px;
-        background: linear-gradient(90deg, #00d9ff, #00ff88);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #00d9ff;
       }
 
       .subtitle {
@@ -132,19 +131,55 @@
         left: 0;
         right: 0;
         display: flex;
-        justify-content: space-between;
+        justify-content: center;
         align-items: center;
         padding: 12px 20px;
         background: rgba(22, 33, 62, 0.95);
         backdrop-filter: blur(10px);
         border-top: 1px solid rgba(255, 255, 255, 0.1);
         z-index: 1000;
-        flex-wrap: wrap;
         gap: 10px;
       }
 
       .bottom-spacer {
         height: 80px;
+      }
+
+      .share-btn {
+        position: absolute;
+        right: 20px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+      }
+
+      .share-btn svg {
+        width: 20px;
+        height: 20px;
+        fill: #fff;
+      }
+
+      .share-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: scale(1.05);
+      }
+
+      .share-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      #captureArea {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        padding: 20px;
+        border-radius: 15px;
       }
 
       .status-item {
@@ -697,46 +732,53 @@
   <body>
     <div class="toast-container" id="toastContainer"></div>
     <div class="container">
-      <header>
-        <h1>Brecha Cambiaria Venezuela</h1>
-        <p class="subtitle">Datos actualizados automaticamente cada minuto</p>
-      </header>
+      <div id="captureArea">
+        <header>
+          <h1>Brecha Cambiaria Venezuela</h1>
+          <p class="subtitle">Datos actualizados automaticamente cada minuto</p>
+        </header>
 
-      <div class="last-update-info">
-        <span id="lastUpdate">Ultima actualizacion: --</span>
-      </div>
+        <div class="last-update-info">
+          <span id="lastUpdate">Ultima actualizacion: --</span>
+        </div>
 
-      <div class="cards">
-        <div class="card">
-          <div class="card-title">USDT Binance</div>
-          <div class="card-value usdt" id="usdtPrice">--</div>
-          <div class="card-change">VES/USDT</div>
+        <div class="cards">
+          <div class="card">
+            <div class="card-title">USDT Binance</div>
+            <div class="card-value usdt" id="usdtPrice">--</div>
+            <div class="card-change">VES/USDT</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Dolar BCV</div>
+            <div class="card-value bcv" id="bcvPrice">--</div>
+            <div class="card-change">VES/USD</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Euro BCV</div>
+            <div class="card-value eur" id="eurPrice">--</div>
+            <div class="card-change">VES/EUR</div>
+          </div>
+          <div class="card">
+            <div class="card-title">USDT vs $ BCV</div>
+            <div class="card-value brecha" id="brechaUsdtUsd">--</div>
+            <div class="card-change">Brecha</div>
+          </div>
+          <div class="card">
+            <div class="card-title">USDT vs € BCV</div>
+            <div class="card-value brecha" id="brechaUsdtEur">--</div>
+            <div class="card-change">Brecha</div>
+          </div>
+          <div class="card">
+            <div class="card-title">€ BCV vs $ BCV</div>
+            <div class="card-value brecha" id="brechaEurUsd">--</div>
+            <div class="card-change">Brecha</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-title">Dolar BCV</div>
-          <div class="card-value bcv" id="bcvPrice">--</div>
-          <div class="card-change">VES/USD</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Euro BCV</div>
-          <div class="card-value eur" id="eurPrice">--</div>
-          <div class="card-change">VES/EUR</div>
-        </div>
-        <div class="card">
-          <div class="card-title">USDT vs $ BCV</div>
-          <div class="card-value brecha" id="brechaUsdtUsd">--</div>
-          <div class="card-change">Brecha</div>
-        </div>
-        <div class="card">
-          <div class="card-title">USDT vs € BCV</div>
-          <div class="card-value brecha" id="brechaUsdtEur">--</div>
-          <div class="card-change">Brecha</div>
-        </div>
-        <div class="card">
-          <div class="card-title">€ BCV vs $ BCV</div>
-          <div class="card-value brecha" id="brechaEurUsd">--</div>
-          <div class="card-change">Brecha</div>
-        </div>
+
+        <footer>
+          <p>Datos obtenidos de Binance P2P y Banco Central de Venezuela (BCV)</p>
+          <p>Los precios de Binance son promedios ponderados por disponibilidad</p>
+        </footer>
       </div>
 
       <div class="calculator">
@@ -915,13 +957,6 @@
         </div>
       </div>
 
-      <footer>
-        <p>Datos obtenidos de Binance P2P y Banco Central de Venezuela (BCV)</p>
-        <p>
-          Los precios de Binance son promedios ponderados por disponibilidad
-        </p>
-      </footer>
-
       <div class="bottom-spacer"></div>
     </div>
 
@@ -945,6 +980,23 @@
           </svg>
         </button>
       </div>
+      <button
+        class="share-btn"
+        id="shareBtn"
+        title="Compartir"
+        aria-label="Compartir captura"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"
+          />
+        </svg>
+      </button>
     </div>
 
     <script>
@@ -1605,12 +1657,82 @@
           .getElementById("updateBtn")
           .addEventListener("click", showLatestData);
 
+        // Event listener para boton de compartir
+        document
+          .getElementById("shareBtn")
+          .addEventListener("click", shareCapture);
+
         // Forzar actualizacion de precios al cargar la pagina
         refreshOnLoad();
 
         // Actualizar en background cada 60 segundos
         setInterval(fetchInBackground, 60000);
       });
+
+      async function shareCapture() {
+        const shareBtn = document.getElementById("shareBtn");
+        const captureArea = document.getElementById("captureArea");
+
+        shareBtn.disabled = true;
+
+        // Guardar estilos originales
+        const originalWidth = captureArea.style.width;
+        const originalMaxWidth = captureArea.style.maxWidth;
+
+        try {
+          // Temporalmente ajustar ancho para captura tablet horizontal
+          captureArea.style.width = "768px";
+          captureArea.style.maxWidth = "768px";
+
+          const canvas = await html2canvas(captureArea, {
+            backgroundColor: "#1a1a2e",
+            scale: 2,
+            useCORS: true,
+          });
+
+          // Restaurar estilos originales
+          captureArea.style.width = originalWidth;
+          captureArea.style.maxWidth = originalMaxWidth;
+
+          // Convertir a blob
+          const blob = await new Promise((resolve) =>
+            canvas.toBlob(resolve, "image/png")
+          );
+
+          const file = new File([blob], "brecha-cambiaria.png", {
+            type: "image/png",
+          });
+
+          // Intentar usar Web Share API
+          if (navigator.share && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: "Brecha Cambiaria Venezuela",
+              text: "Tasas de cambio actualizadas",
+              files: [file],
+            });
+            showToast("Compartido exitosamente", "success");
+          } else {
+            // Fallback: descargar imagen
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "brecha-cambiaria.png";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("Imagen descargada", "success");
+          }
+        } catch (error) {
+          console.error("Error al compartir:", error);
+          showToast("Error al generar la captura", "error");
+        } finally {
+          // Restaurar estilos originales (por si hubo error antes)
+          captureArea.style.width = originalWidth;
+          captureArea.style.maxWidth = originalMaxWidth;
+          shareBtn.disabled = false;
+        }
+      }
     </script>
   </body>
 </html>
