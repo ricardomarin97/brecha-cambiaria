@@ -1,1269 +1,1616 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Brecha Cambiaria Venezuela - USDT vs BCV</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            touch-action: manipulation;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        touch-action: manipulation;
+      }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #fff;
-            min-height: 100vh;
-            padding: 20px;
-        }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: #fff;
+        min-height: 100vh;
+        padding: 20px;
+      }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
 
-        header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
+      header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
 
+      h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        background: linear-gradient(90deg, #00d9ff, #00ff88);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .subtitle {
+        color: #9ca3af;
+        font-size: 1rem;
+      }
+
+      .last-update-info {
+        text-align: center;
+        margin-bottom: 20px;
+        padding: 10px 15px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .last-update-info span {
+        color: #9ca3af;
+        font-size: 0.9rem;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 15px;
+        margin-bottom: 30px;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        padding: 18px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+      }
+
+      .card-title {
+        font-size: 0.8rem;
+        color: #9ca3af;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .card-value {
+        font-size: 1.6rem;
+        font-weight: bold;
+      }
+
+      .card-value.usdt {
+        color: #ffd93d;
+      }
+      .card-value.bcv {
+        color: #00d9ff;
+      }
+      .card-value.eur {
+        color: #a55eea;
+      }
+      .card-value.brecha {
+        color: #ff9f43;
+      }
+
+      .card-change {
+        font-size: 0.85rem;
+        margin-top: 5px;
+        color: #94a3b8;
+      }
+
+      .chart-container {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .chart-title {
+        font-size: 1.2rem;
+        margin-bottom: 15px;
+        color: #fff;
+      }
+
+      .chart-wrapper {
+        position: relative;
+        height: 300px;
+      }
+
+      .status-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 20px;
+        background: rgba(22, 33, 62, 0.95);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 1000;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .bottom-spacer {
+        height: 80px;
+      }
+
+      .status-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+      }
+
+      .update-btn-container {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .update-btn {
+        position: relative;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #00d9ff, #00ff88);
+        border: none;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s,
+          background 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 15px rgba(0, 217, 255, 0.4);
+      }
+
+      /* Estado conectado (verde) */
+      .update-btn.connected {
+        background: linear-gradient(135deg, #00ff88, #00d9ff);
+        box-shadow: 0 4px 15px rgba(0, 255, 136, 0.4);
+        animation: pulse 2s infinite;
+      }
+
+      /* Estado cargando (amarillo) */
+      .update-btn.loading {
+        background: linear-gradient(135deg, #ffd93d, #ffb347);
+        box-shadow: 0 4px 15px rgba(255, 217, 61, 0.4);
+        animation: none;
+      }
+
+      /* Estado error (rojo) */
+      .update-btn.error {
+        background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+        animation: none;
+      }
+
+      .update-btn svg {
+        width: 24px;
+        height: 24px;
+        fill: #1a1a2e;
+        transition: transform 0.3s;
+      }
+
+      .update-btn:hover:not(:disabled) {
+        transform: scale(1.1);
+      }
+
+      .update-btn:hover:not(:disabled) svg {
+        transform: rotate(180deg);
+      }
+
+      .update-btn:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+
+      .update-btn.loading svg {
+        animation: spin 1s linear infinite;
+      }
+
+      .update-btn.has-new {
+        animation: glow 1.5s ease-in-out infinite alternate;
+      }
+
+      .update-btn.has-new::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 14px;
+        height: 14px;
+        background: #ff6b6b;
+        border-radius: 50%;
+        border: 2px solid #16213e;
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes glow {
+        from {
+          box-shadow: 0 4px 15px rgba(0, 217, 255, 0.4);
+        }
+        to {
+          box-shadow:
+            0 4px 25px rgba(0, 217, 255, 0.8),
+            0 0 40px rgba(0, 255, 136, 0.3);
+        }
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .legend {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin-top: 15px;
+        flex-wrap: wrap;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+      }
+
+      .legend-color {
+        width: 20px;
+        height: 4px;
+        border-radius: 2px;
+      }
+
+      /* Calculadora */
+      .calculator {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        padding: 25px;
+        margin-bottom: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .calc-title {
+        font-size: 1.2rem;
+        margin-bottom: 20px;
+        color: #fff;
+      }
+
+      .calc-input-group {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+      }
+
+      .calc-input-wrapper {
+        flex: 1;
+        min-width: 200px;
+      }
+
+      .calc-label {
+        display: block;
+        font-size: 0.85rem;
+        color: #9ca3af;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .calc-input {
+        width: 100%;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.3);
+        color: #fff;
+        font-size: 1.2rem;
+        outline: none;
+        transition: border-color 0.3s;
+      }
+
+      .calc-input:focus {
+        border-color: #00d9ff;
+        box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.25);
+        outline: none;
+      }
+
+      .calc-input-container {
+        position: relative;
+        width: 100%;
+      }
+
+      .calc-input-suffix {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #888;
+        font-size: 1rem;
+        font-weight: bold;
+      }
+
+      .calc-input-container .calc-input {
+        padding-right: 85px;
+      }
+
+      .calc-currency-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .calc-currency-btn {
+        flex: 1;
+        min-width: 80px;
+        padding: 12px 15px;
+        border-radius: 10px;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.3);
+        color: #888;
+        font-size: 0.9rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+      }
+
+      .calc-currency-btn:hover {
+        border-color: rgba(255, 255, 255, 0.3);
+        color: #fff;
+      }
+
+      .calc-currency-btn.active {
+        border-color: #00d9ff;
+        background: rgba(0, 217, 255, 0.15);
+        color: #00d9ff;
+        box-shadow: 0 0 20px rgba(0, 217, 255, 0.2);
+      }
+
+      .calc-currency-btn.active.ves-btn {
+        border-color: #00ff88;
+        background: rgba(0, 255, 136, 0.15);
+        color: #00ff88;
+        box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
+      }
+
+      .calc-currency-btn.active.eur-btn {
+        border-color: #a55eea;
+        background: rgba(165, 94, 234, 0.15);
+        color: #a55eea;
+        box-shadow: 0 0 20px rgba(165, 94, 234, 0.2);
+      }
+
+      .calc-currency-btn.active.usdt-btn {
+        border-color: #ffd93d;
+        background: rgba(255, 217, 61, 0.15);
+        color: #ffd93d;
+        box-shadow: 0 0 20px rgba(255, 217, 61, 0.2);
+      }
+
+      .calc-results {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+      }
+
+      .calc-result-card {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 12px;
+        padding: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .calc-result-label {
+        font-size: 0.75rem;
+        color: #888;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .calc-result-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+      }
+
+      .calc-result-value.ves {
+        color: #00ff88;
+      }
+      .calc-result-value.bcv {
+        color: #00d9ff;
+      }
+      .calc-result-value.eur {
+        color: #a55eea;
+      }
+      .calc-result-value.usdt {
+        color: #ffd93d;
+      }
+      .calc-result-value.ref {
+        color: #ff6b6b;
+      }
+
+      .calc-result-rate {
+        font-size: 0.7rem;
+        color: #94a3b8;
+        margin-top: 5px;
+      }
+
+      footer {
+        text-align: center;
+        padding: 20px;
+        color: #666;
+        font-size: 0.85rem;
+      }
+
+      /* Filtro de rango de tiempo */
+      .time-filter {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        padding: 15px 20px;
+        margin-bottom: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .time-filter-title {
+        font-size: 0.9rem;
+        color: #888;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .time-filter-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .time-filter-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .time-filter-group label {
+        font-size: 0.85rem;
+        color: #aaa;
+      }
+
+      .time-filter-input {
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.3);
+        color: #fff;
+        font-size: 0.85rem;
+      }
+
+      .time-filter-input:focus {
+        outline: none;
+        border-color: #00d9ff;
+        box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.25);
+      }
+
+      /* Focus visible para navegacion por teclado */
+      .update-btn:focus-visible,
+      .calc-currency-btn:focus-visible,
+      .quick-filter-btn:focus-visible,
+      .apply-filter-btn:focus-visible {
+        outline: 2px solid #00d9ff;
+        outline-offset: 2px;
+      }
+
+      .quick-filter-btn {
+        padding: 12px 16px;
+        min-height: 44px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(0, 0, 0, 0.2);
+        color: #aaa;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .quick-filter-btn:hover {
+        border-color: #00d9ff;
+        color: #00d9ff;
+      }
+
+      .quick-filter-btn.active {
+        background: rgba(0, 217, 255, 0.15);
+        border-color: #00d9ff;
+        color: #00d9ff;
+      }
+
+      .apply-filter-btn {
+        padding: 12px 20px;
+        min-height: 44px;
+        border-radius: 6px;
+        border: none;
+        background: linear-gradient(90deg, #00d9ff, #00ff88);
+        color: #1a1a2e;
+        font-size: 0.875rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .apply-filter-btn:hover {
+        transform: translateY(-1px);
+      }
+
+      @media (max-width: 768px) {
         h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            background: linear-gradient(90deg, #00d9ff, #00ff88);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+          font-size: 1.8rem;
         }
-
-        .subtitle {
-            color: #9ca3af;
-            font-size: 1rem;
-        }
-
-        .cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 15px;
-            padding: 18px;
-            text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-        }
-
-        .card-title {
-            font-size: 0.8rem;
-            color: #9ca3af;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
         .card-value {
-            font-size: 1.6rem;
-            font-weight: bold;
+          font-size: 1.3rem;
         }
-
-        .card-value.usdt { color: #ffd93d; }
-        .card-value.bcv { color: #00d9ff; }
-        .card-value.eur { color: #a55eea; }
-        .card-value.brecha { color: #ff9f43; }
-
-        .card-change {
-            font-size: 0.85rem;
-            margin-top: 5px;
-            color: #94a3b8;
-        }
-
-        .chart-container {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .chart-title {
-            font-size: 1.2rem;
-            margin-bottom: 15px;
-            color: #fff;
-        }
-
         .chart-wrapper {
-            position: relative;
-            height: 300px;
+          height: 250px;
         }
-
-        .status-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 20px;
-            background: rgba(22, 33, 62, 0.95);
-            backdrop-filter: blur(10px);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 1000;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .bottom-spacer {
-            height: 80px;
-        }
-
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #00ff88;
-            animation: pulse 2s infinite;
-        }
-
-        .status-dot.loading { background: #ffd93d; }
-        .status-dot.error { background: #ff6b6b; animation: none; }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .update-btn-container {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        .update-btn {
-            position: relative;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #00d9ff, #00ff88);
-            border: none;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 15px rgba(0, 217, 255, 0.4);
-        }
-
-        .update-btn svg {
-            width: 24px;
-            height: 24px;
-            fill: #1a1a2e;
-            transition: transform 0.3s;
-        }
-
-        .update-btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 25px rgba(0, 217, 255, 0.5);
-        }
-
-        .update-btn:hover svg {
-            transform: rotate(180deg);
-        }
-
-        .update-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .update-btn:disabled svg {
-            animation: spin 1s linear infinite;
-        }
-
-        .update-btn.has-new {
-            animation: glow 1.5s ease-in-out infinite alternate;
-        }
-
-        .update-btn.has-new::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 14px;
-            height: 14px;
-            background: #ff6b6b;
-            border-radius: 50%;
-            border: 2px solid #16213e;
-            animation: pulse 1s infinite;
-        }
-
-        @keyframes glow {
-            from { box-shadow: 0 4px 15px rgba(0, 217, 255, 0.4); }
-            to { box-shadow: 0 4px 25px rgba(0, 217, 255, 0.8), 0 0 40px rgba(0, 255, 136, 0.3); }
-        }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        .legend {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 15px;
-            flex-wrap: wrap;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.85rem;
-        }
-
-        .legend-color {
-            width: 20px;
-            height: 4px;
-            border-radius: 2px;
-        }
-
-        /* Calculadora */
-        .calculator {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .calc-title {
-            font-size: 1.2rem;
-            margin-bottom: 20px;
-            color: #fff;
-        }
-
-        .calc-input-group {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 25px;
-            flex-wrap: wrap;
-        }
-
-        .calc-input-wrapper {
-            flex: 1;
-            min-width: 200px;
-        }
-
-        .calc-label {
-            display: block;
-            font-size: 0.85rem;
-            color: #9ca3af;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .calc-input {
-            width: 100%;
-            padding: 15px;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(0, 0, 0, 0.3);
-            color: #fff;
-            font-size: 1.2rem;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-
-        .calc-input:focus {
-            border-color: #00d9ff;
-            box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.25);
-            outline: none;
-        }
-
-        .calc-input-container {
-            position: relative;
-            width: 100%;
-        }
-
-        .calc-input-suffix {
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #888;
-            font-size: 1rem;
-            font-weight: bold;
-        }
-
-        .calc-input-container .calc-input { padding-right: 85px; }
-
-        .calc-currency-buttons {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .calc-currency-btn {
-            flex: 1;
-            min-width: 80px;
-            padding: 12px 15px;
-            border-radius: 10px;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            background: rgba(0, 0, 0, 0.3);
-            color: #888;
-            font-size: 0.9rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-
-        .calc-currency-btn:hover {
-            border-color: rgba(255, 255, 255, 0.3);
-            color: #fff;
-        }
-
-        .calc-currency-btn.active {
-            border-color: #00d9ff;
-            background: rgba(0, 217, 255, 0.15);
-            color: #00d9ff;
-            box-shadow: 0 0 20px rgba(0, 217, 255, 0.2);
-        }
-
-        .calc-currency-btn.active.ves-btn {
-            border-color: #00ff88;
-            background: rgba(0, 255, 136, 0.15);
-            color: #00ff88;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
-        }
-
-        .calc-currency-btn.active.eur-btn {
-            border-color: #a55eea;
-            background: rgba(165, 94, 234, 0.15);
-            color: #a55eea;
-            box-shadow: 0 0 20px rgba(165, 94, 234, 0.2);
-        }
-
-        .calc-currency-btn.active.usdt-btn {
-            border-color: #ffd93d;
-            background: rgba(255, 217, 61, 0.15);
-            color: #ffd93d;
-            box-shadow: 0 0 20px rgba(255, 217, 61, 0.2);
-        }
-
-        .calc-results {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-
-        .calc-result-card {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 12px;
-            padding: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .calc-result-label {
-            font-size: 0.75rem;
-            color: #888;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
         .calc-result-value {
-            font-size: 1.5rem;
-            font-weight: bold;
+          font-size: 1.2rem;
         }
-
-        .calc-result-value.ves { color: #00ff88; }
-        .calc-result-value.bcv { color: #00d9ff; }
-        .calc-result-value.eur { color: #a55eea; }
-        .calc-result-value.usdt { color: #ffd93d; }
-
-        .calc-result-rate {
-            font-size: 0.7rem;
-            color: #94a3b8;
-            margin-top: 5px;
-        }
-
-        footer {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-            font-size: 0.85rem;
-        }
-
-        /* Filtro de rango de tiempo */
-        .time-filter {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            padding: 15px 20px;
-            margin-bottom: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .time-filter-title {
-            font-size: 0.9rem;
-            color: #888;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
         .time-filter-controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
+          flex-direction: column;
+          align-items: stretch;
         }
-
         .time-filter-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+          flex-wrap: wrap;
         }
+      }
 
-        .time-filter-group label {
-            font-size: 0.85rem;
-            color: #aaa;
+      /* Respetar preferencias de reduccion de movimiento */
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
         }
+      }
 
-        .time-filter-input {
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(0, 0, 0, 0.3);
-            color: #fff;
-            font-size: 0.85rem;
-        }
+      /* Sistema de notificaciones toast */
+      .toast-container {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1100;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+      }
 
-        .time-filter-input:focus {
-            outline: none;
-            border-color: #00d9ff;
-            box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.25);
-        }
+      .toast {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 20px;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        pointer-events: auto;
+        animation: toastSlideIn 0.3s ease;
+      }
 
-        /* Focus visible para navegacion por teclado */
-        .update-btn:focus-visible,
-        .calc-currency-btn:focus-visible,
-        .quick-filter-btn:focus-visible,
-        .apply-filter-btn:focus-visible {
-            outline: 2px solid #00d9ff;
-            outline-offset: 2px;
-        }
+      .toast.toast-error {
+        background: #dc2626;
+        color: white;
+      }
 
-        .quick-filter-btn {
-            padding: 12px 16px;
-            min-height: 44px;
-            border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            background: rgba(0, 0, 0, 0.2);
-            color: #aaa;
-            font-size: 0.875rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
+      .toast.toast-success {
+        background: #16a34a;
+        color: white;
+      }
 
-        .quick-filter-btn:hover {
-            border-color: #00d9ff;
-            color: #00d9ff;
-        }
+      .toast.toast-warning {
+        background: #d97706;
+        color: white;
+      }
 
-        .quick-filter-btn.active {
-            background: rgba(0, 217, 255, 0.15);
-            border-color: #00d9ff;
-            color: #00d9ff;
-        }
+      .toast-icon {
+        font-size: 1.2rem;
+        flex-shrink: 0;
+      }
 
-        .apply-filter-btn {
-            padding: 12px 20px;
-            min-height: 44px;
-            border-radius: 6px;
-            border: none;
-            background: linear-gradient(90deg, #00d9ff, #00ff88);
-            color: #1a1a2e;
-            font-size: 0.875rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
+      .toast-close {
+        background: none;
+        border: none;
+        color: inherit;
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 0;
+        margin-left: 8px;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+      }
 
-        .apply-filter-btn:hover {
-            transform: translateY(-1px);
-        }
+      .toast-close:hover {
+        opacity: 1;
+      }
 
-        @media (max-width: 768px) {
-            h1 { font-size: 1.8rem; }
-            .card-value { font-size: 1.3rem; }
-            .chart-wrapper { height: 250px; }
-            .calc-result-value { font-size: 1.2rem; }
-            .time-filter-controls { flex-direction: column; align-items: stretch; }
-            .time-filter-group { flex-wrap: wrap; }
-        }
+      .toast.toast-hiding {
+        animation: toastSlideOut 0.3s ease forwards;
+      }
 
-        /* Respetar preferencias de reduccion de movimiento */
-        @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
-            }
+      @keyframes toastSlideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
         }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
 
-        /* Sistema de notificaciones toast */
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1100;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            pointer-events: none;
+      @keyframes toastSlideOut {
+        from {
+          opacity: 1;
+          transform: translateY(0);
         }
-
-        .toast {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 14px 20px;
-            border-radius: 10px;
-            font-size: 0.9rem;
-            font-weight: 500;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            pointer-events: auto;
-            animation: toastSlideIn 0.3s ease;
+        to {
+          opacity: 0;
+          transform: translateY(-20px);
         }
-
-        .toast.toast-error {
-            background: #dc2626;
-            color: white;
-        }
-
-        .toast.toast-success {
-            background: #16a34a;
-            color: white;
-        }
-
-        .toast.toast-warning {
-            background: #d97706;
-            color: white;
-        }
-
-        .toast-icon {
-            font-size: 1.2rem;
-            flex-shrink: 0;
-        }
-
-        .toast-close {
-            background: none;
-            border: none;
-            color: inherit;
-            font-size: 1.2rem;
-            cursor: pointer;
-            padding: 0;
-            margin-left: 8px;
-            opacity: 0.7;
-            transition: opacity 0.2s;
-        }
-
-        .toast-close:hover {
-            opacity: 1;
-        }
-
-        .toast.toast-hiding {
-            animation: toastSlideOut 0.3s ease forwards;
-        }
-
-        @keyframes toastSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes toastSlideOut {
-            from {
-                opacity: 1;
-                transform: translateY(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="toast-container" id="toastContainer"></div>
     <div class="container">
-        <header>
-            <h1>Brecha Cambiaria Venezuela</h1>
-            <p class="subtitle">Datos actualizados automaticamente cada minuto</p>
-        </header>
+      <header>
+        <h1>Brecha Cambiaria Venezuela</h1>
+        <p class="subtitle">Datos actualizados automaticamente cada minuto</p>
+      </header>
 
-                <div class="calculator">
-            <h3 class="calc-title">🧮 Calculadora de Cambio</h3>
+      <div class="last-update-info">
+        <span id="lastUpdate">Ultima actualizacion: --</span>
+      </div>
 
-            <div class="calc-input-group">
-                <div class="calc-input-wrapper">
-                    <label class="calc-label">Moneda de origen</label>
-                    <div class="calc-currency-buttons">
-                        <button type="button" class="calc-currency-btn active" id="btnUSD" data-currency="USD">$ BCV</button>
-                        <button type="button" class="calc-currency-btn eur-btn" id="btnEUR" data-currency="EUR">€ BCV</button>
-                        <button type="button" class="calc-currency-btn ves-btn" id="btnVES" data-currency="VES">Bs</button>
-                        <button type="button" class="calc-currency-btn usdt-btn" id="btnUSDT" data-currency="USDT">USDT</button>
-                    </div>
-                </div>
-                <div class="calc-input-wrapper">
-                    <label class="calc-label" for="calcAmount">Monto</label>
-                    <div class="calc-input-container">
-                        <input type="number" id="calcAmount" class="calc-input" placeholder="0.00" value="100" min="0" step="0.01">
-                        <span class="calc-input-suffix" id="calcSuffix">$ BCV</span>
-                    </div>
-                </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-title">USDT Binance</div>
+          <div class="card-value usdt" id="usdtPrice">--</div>
+          <div class="card-change">VES/USDT</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Dolar BCV</div>
+          <div class="card-value bcv" id="bcvPrice">--</div>
+          <div class="card-change">VES/USD</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Euro BCV</div>
+          <div class="card-value eur" id="eurPrice">--</div>
+          <div class="card-change">VES/EUR</div>
+        </div>
+        <div class="card">
+          <div class="card-title">USDT vs $ BCV</div>
+          <div class="card-value brecha" id="brechaUsdtUsd">--</div>
+          <div class="card-change">Brecha</div>
+        </div>
+        <div class="card">
+          <div class="card-title">USDT vs € BCV</div>
+          <div class="card-value brecha" id="brechaUsdtEur">--</div>
+          <div class="card-change">Brecha</div>
+        </div>
+        <div class="card">
+          <div class="card-title">€ BCV vs $ BCV</div>
+          <div class="card-value brecha" id="brechaEurUsd">--</div>
+          <div class="card-change">Brecha</div>
+        </div>
+      </div>
+
+      <div class="calculator">
+        <h3 class="calc-title">🧮 Calculadora de Cambio</h3>
+
+        <div class="calc-input-group">
+          <div class="calc-input-wrapper">
+            <label class="calc-label">Moneda de origen</label>
+            <div class="calc-currency-buttons">
+                <button
+                type="button"
+                class="calc-currency-btn usdt-btn"
+                id="btnUSDT"
+                data-currency="USDT"
+              >
+                USDT
+              </button>
+              <button
+                type="button"
+                class="calc-currency-btn active"
+                id="btnUSD"
+                data-currency="USD"
+              >
+                $ BCV
+              </button>
+              <button
+                type="button"
+                class="calc-currency-btn eur-btn"
+                id="btnEUR"
+                data-currency="EUR"
+              >
+                € BCV
+              </button>
+              <button
+                type="button"
+                class="calc-currency-btn ves-btn"
+                id="btnVES"
+                data-currency="VES"
+              >
+                Bs
+              </button>
             </div>
-
-            <div class="calc-results">
-                <div class="calc-result-card" id="resultVES">
-                    <div class="calc-result-label">Bolivares (VES)</div>
-                    <div class="calc-result-value ves" id="calcVES">--</div>
-                    <div class="calc-result-rate" id="rateVES"></div>
-                </div>
-                <div class="calc-result-card" id="resultBCV">
-                    <div class="calc-result-label">Dolar BCV (USD)</div>
-                    <div class="calc-result-value bcv" id="calcBCV">--</div>
-                    <div class="calc-result-rate" id="rateBCV"></div>
-                </div>
-                <div class="calc-result-card" id="resultEUR">
-                    <div class="calc-result-label">Euro BCV (EUR)</div>
-                    <div class="calc-result-value eur" id="calcEUR">--</div>
-                    <div class="calc-result-rate" id="rateEUR"></div>
-                </div>
-                <div class="calc-result-card" id="resultUSDT">
-                    <div class="calc-result-label">USDT Binance</div>
-                    <div class="calc-result-value usdt" id="calcUSDT">--</div>
-                    <div class="calc-result-rate" id="rateUSDT"></div>
-                </div>
+          </div>
+          <div class="calc-input-wrapper">
+            <label class="calc-label" for="calcAmount">Monto</label>
+            <div class="calc-input-container">
+              <input
+                type="number"
+                id="calcAmount"
+                class="calc-input"
+                placeholder="0.00"
+                value="100"
+                min="0"
+                step="0.01"
+              />
+              <span class="calc-input-suffix" id="calcSuffix">$ BCV</span>
             </div>
+          </div>
+          <div class="calc-input-wrapper">
+            <label class="calc-label" for="calcRefRate">Tasa Referencial (VES) (Opcional)</label>
+            <div class="calc-input-container">
+              <input
+                type="number"
+                id="calcRefRate"
+                class="calc-input"
+                placeholder="Ej: 500.00"
+                min="0"
+                step="0.01"
+              />
+              <span class="calc-input-suffix">Bs/$</span>
+            </div>
+          </div>
         </div>
 
-        <div class="cards">
-            <div class="card">
-                <div class="card-title">USDT Binance</div>
-                <div class="card-value usdt" id="usdtPrice">--</div>
-                <div class="card-change">VES/USDT</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Dolar BCV</div>
-                <div class="card-value bcv" id="bcvPrice">--</div>
-                <div class="card-change">VES/USD</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Euro BCV</div>
-                <div class="card-value eur" id="eurPrice">--</div>
-                <div class="card-change">VES/EUR</div>
-            </div>
-            <div class="card">
-                <div class="card-title">USDT vs $ BCV</div>
-                <div class="card-value brecha" id="brechaUsdtUsd">--</div>
-                <div class="card-change">Brecha</div>
-            </div>
-            <div class="card">
-                <div class="card-title">USDT vs € BCV</div>
-                <div class="card-value brecha" id="brechaUsdtEur">--</div>
-                <div class="card-change">Brecha</div>
-            </div>
-            <div class="card">
-                <div class="card-title">€ BCV vs $ BCV</div>
-                <div class="card-value brecha" id="brechaEurUsd">--</div>
-                <div class="card-change">Brecha</div>
-            </div>
+        <div class="calc-results">
+          <div class="calc-result-card" id="resultVES">
+            <div class="calc-result-label">Bolivares (VES)</div>
+            <div class="calc-result-value ves" id="calcVES">--</div>
+            <div class="calc-result-rate" id="rateVES"></div>
+          </div>
+          <div class="calc-result-card" id="resultBCV">
+            <div class="calc-result-label">Dolar BCV (USD)</div>
+            <div class="calc-result-value bcv" id="calcBCV">--</div>
+            <div class="calc-result-rate" id="rateBCV"></div>
+          </div>
+          <div class="calc-result-card" id="resultEUR">
+            <div class="calc-result-label">Euro BCV (EUR)</div>
+            <div class="calc-result-value eur" id="calcEUR">--</div>
+            <div class="calc-result-rate" id="rateEUR"></div>
+          </div>
+          <div class="calc-result-card" id="resultUSDT">
+            <div class="calc-result-label">USDT Binance</div>
+            <div class="calc-result-value usdt" id="calcUSDT">--</div>
+            <div class="calc-result-rate" id="rateUSDT"></div>
+          </div>
+          <div class="calc-result-card" id="resultREF">
+            <div class="calc-result-label">Tasa Referencial (Opcional)</div>
+            <div class="calc-result-value ref" id="calcREF">--</div>
+            <div class="calc-result-rate" id="rateREF"></div>
+          </div>
         </div>
+      </div>
 
-        <div class="time-filter">
-            <div class="time-filter-title">Filtrar por rango de tiempo</div>
-            <div class="time-filter-controls">
-                <button class="quick-filter-btn active" data-filter="1h">Ultima hora</button>
-                <button class="quick-filter-btn" data-filter="24h">Ultimas 24h</button>
-                <button class="quick-filter-btn" data-filter="7d">Ultima semana</button>
-                <button class="quick-filter-btn" data-filter="all">Todo</button>
-                <div class="time-filter-group">
-                    <label>Desde:</label>
-                    <input type="datetime-local" id="filterStart" class="time-filter-input">
-                </div>
-                <div class="time-filter-group">
-                    <label>Hasta:</label>
-                    <input type="datetime-local" id="filterEnd" class="time-filter-input">
-                </div>
-                <button class="apply-filter-btn" id="applyFilterBtn">Aplicar</button>
-            </div>
+      <div class="time-filter">
+        <div class="time-filter-title">Filtrar por rango de tiempo</div>
+        <div class="time-filter-controls">
+          <button class="quick-filter-btn" data-filter="1h">
+            Ultima hora
+          </button>
+          <button class="quick-filter-btn" data-filter="24h">
+            Ultimas 24h
+          </button>
+          <button class="quick-filter-btn active" data-filter="7d">
+            Ultima semana
+          </button>
+          <button class="quick-filter-btn" data-filter="all">Todo</button>
+          <div class="time-filter-group">
+            <label>Desde:</label>
+            <input
+              type="datetime-local"
+              id="filterStart"
+              class="time-filter-input"
+            />
+          </div>
+          <div class="time-filter-group">
+            <label>Hasta:</label>
+            <input
+              type="datetime-local"
+              id="filterEnd"
+              class="time-filter-input"
+            />
+          </div>
+          <button class="apply-filter-btn" id="applyFilterBtn">Aplicar</button>
         </div>
+      </div>
 
-        <div class="chart-container">
-            <h3 class="chart-title">Historico de Precios (VES)</h3>
-            <div class="chart-wrapper">
-                <canvas id="priceChart"></canvas>
-            </div>
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ffd93d;"></div>
-                    <span>USDT Binance</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #00d9ff;"></div>
-                    <span>Dolar BCV</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #a55eea;"></div>
-                    <span>Euro BCV</span>
-                </div>
-            </div>
+      <div class="chart-container">
+        <h3 class="chart-title">Historico de Precios (VES)</h3>
+        <div class="chart-wrapper">
+          <canvas id="priceChart"></canvas>
         </div>
-
-        <div class="chart-container">
-            <h3 class="chart-title">Brechas Cambiarias (%)</h3>
-            <div class="chart-wrapper">
-                <canvas id="brechaChart"></canvas>
-            </div>
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ffd93d;"></div>
-                    <span>USDT vs $ BCV</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ff9f43;"></div>
-                    <span>USDT vs € BCV</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #a55eea;"></div>
-                    <span>€ BCV vs $ BCV</span>
-                </div>
-            </div>
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-color" style="background: #ffd93d"></div>
+            <span>USDT Binance</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #00d9ff"></div>
+            <span>Dolar BCV</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #a55eea"></div>
+            <span>Euro BCV</span>
+          </div>
         </div>
+      </div>
 
-        <footer>
-            <p>Datos obtenidos de Binance P2P y Banco Central de Venezuela (BCV)</p>
-            <p>Los precios de Binance son promedios ponderados por disponibilidad</p>
-        </footer>
+      <div class="chart-container">
+        <h3 class="chart-title">Brechas Cambiarias (%)</h3>
+        <div class="chart-wrapper">
+          <canvas id="brechaChart"></canvas>
+        </div>
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-color" style="background: #ffd93d"></div>
+            <span>USDT vs $ BCV</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #ff9f43"></div>
+            <span>USDT vs € BCV</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #a55eea"></div>
+            <span>€ BCV vs $ BCV</span>
+          </div>
+        </div>
+      </div>
 
-        <div class="bottom-spacer"></div>
+      <footer>
+        <p>Datos obtenidos de Binance P2P y Banco Central de Venezuela (BCV)</p>
+        <p>
+          Los precios de Binance son promedios ponderados por disponibilidad
+        </p>
+      </footer>
+
+      <div class="bottom-spacer"></div>
     </div>
 
     <div class="status-bar">
-        <div class="status-item">
-            <div class="status-dot" id="statusDot"></div>
-            <span id="statusText">Conectado</span>
-        </div>
-        <div class="update-btn-container">
-            <button class="update-btn" id="updateBtn" title="Actualizar precios" aria-label="Actualizar precios">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                </svg>
-            </button>
-        </div>
-        <div class="status-item">
-            <span id="lastUpdate">Ultima actualizacion: --</span>
-        </div>
+      <div class="update-btn-container">
+        <button
+          class="update-btn connected"
+          id="updateBtn"
+          title="Actualizar precios"
+          aria-label="Actualizar precios"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+            />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <script>
-        let currentPrices = {
-            bcv_usd: null,
-            bcv_eur: null,
-            usdt_avg: null
+      let currentPrices = {
+        bcv_usd: null,
+        bcv_eur: null,
+        usdt_avg: null,
+      };
+
+      let selectedCurrency = "USD";
+      let cachedData = null; // Ultimo dato obtenido en background
+      let displayedData = null; // Dato actualmente mostrado
+      let activeFilter = "7d"; // Filtro activo por defecto
+
+      // Sistema de notificaciones toast
+      function showToast(message, type = "error", duration = 5000) {
+        const container = document.getElementById("toastContainer");
+        const toast = document.createElement("div");
+        toast.className = `toast toast-${type}`;
+
+        const icons = {
+          error: "⚠️",
+          success: "✓",
+          warning: "⚡",
         };
 
-        let selectedCurrency = 'USD';
-        let cachedData = null;      // Ultimo dato obtenido en background
-        let displayedData = null;   // Dato actualmente mostrado
-        let activeFilter = '1h';    // Filtro activo por defecto
-
-        // Sistema de notificaciones toast
-        function showToast(message, type = 'error', duration = 5000) {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-
-            const icons = {
-                error: '⚠️',
-                success: '✓',
-                warning: '⚡'
-            };
-
-            toast.innerHTML = `
+        toast.innerHTML = `
                 <span class="toast-icon">${icons[type] || icons.error}</span>
                 <span class="toast-message">${message}</span>
                 <button class="toast-close" aria-label="Cerrar notificacion">&times;</button>
             `;
 
-            container.appendChild(toast);
+        container.appendChild(toast);
 
-            const closeBtn = toast.querySelector('.toast-close');
-            const hideToast = () => {
-                toast.classList.add('toast-hiding');
-                setTimeout(() => toast.remove(), 300);
-            };
+        const closeBtn = toast.querySelector(".toast-close");
+        const hideToast = () => {
+          toast.classList.add("toast-hiding");
+          setTimeout(() => toast.remove(), 300);
+        };
 
-            closeBtn.addEventListener('click', hideToast);
+        closeBtn.addEventListener("click", hideToast);
 
-            if (duration > 0) {
-                setTimeout(hideToast, duration);
-            }
-
-            return toast;
+        if (duration > 0) {
+          setTimeout(hideToast, duration);
         }
 
-        function selectCurrency(currency) {
-            selectedCurrency = currency;
+        return toast;
+      }
 
-            document.querySelectorAll('.calc-currency-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById('btn' + currency).classList.add('active');
+      function selectCurrency(currency) {
+        selectedCurrency = currency;
 
-            const suffixes = { 'USD': '$ BCV', 'EUR': '€ BCV', 'VES': 'Bs', 'USDT': 'USDT' };
-            document.getElementById('calcSuffix').textContent = suffixes[currency];
+        document
+          .querySelectorAll(".calc-currency-btn")
+          .forEach((btn) => btn.classList.remove("active"));
+        document.getElementById("btn" + currency).classList.add("active");
 
-            calculateConversion();
+        const suffixes = {
+          USD: "$ BCV",
+          EUR: "€ BCV",
+          VES: "Bs",
+          USDT: "USDT",
+        };
+        document.getElementById("calcSuffix").textContent = suffixes[currency];
+
+        calculateConversion();
+      }
+
+      function calculateConversion() {
+        const amount =
+          parseFloat(document.getElementById("calcAmount").value) || 0;
+        const refRate =
+          parseFloat(document.getElementById("calcRefRate").value) || null;
+        const currency = selectedCurrency;
+
+        if (!currentPrices.bcv_usd || !currentPrices.usdt_avg) return;
+
+        let vesAmount, bcvAmount, eurAmount, usdtAmount, refAmount;
+
+        if (currency === "USD") {
+          vesAmount = amount * currentPrices.bcv_usd;
+          bcvAmount = amount;
+          eurAmount = (amount * currentPrices.bcv_usd) / currentPrices.bcv_eur;
+          usdtAmount =
+            (amount * currentPrices.bcv_usd) / currentPrices.usdt_avg;
+          refAmount = refRate ? (amount * currentPrices.bcv_usd) / refRate : null;
+        } else if (currency === "EUR") {
+          vesAmount = amount * currentPrices.bcv_eur;
+          bcvAmount = (amount * currentPrices.bcv_eur) / currentPrices.bcv_usd;
+          eurAmount = amount;
+          usdtAmount =
+            (amount * currentPrices.bcv_eur) / currentPrices.usdt_avg;
+          refAmount = refRate ? (amount * currentPrices.bcv_eur) / refRate : null;
+        } else if (currency === "VES") {
+          vesAmount = amount;
+          bcvAmount = amount / currentPrices.bcv_usd;
+          eurAmount = amount / currentPrices.bcv_eur;
+          usdtAmount = amount / currentPrices.usdt_avg;
+          refAmount = refRate ? amount / refRate : null;
+        } else if (currency === "USDT") {
+          vesAmount = amount * currentPrices.usdt_avg;
+          bcvAmount = (amount * currentPrices.usdt_avg) / currentPrices.bcv_usd;
+          eurAmount = (amount * currentPrices.usdt_avg) / currentPrices.bcv_eur;
+          usdtAmount = amount;
+          refAmount = refRate ? (amount * currentPrices.usdt_avg) / refRate : null;
         }
 
-        function calculateConversion() {
-            const amount = parseFloat(document.getElementById('calcAmount').value) || 0;
-            const currency = selectedCurrency;
+        document.getElementById("calcVES").textContent =
+          vesAmount.toLocaleString("es-VE", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        document.getElementById("calcBCV").textContent =
+          bcvAmount.toLocaleString("es-VE", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        document.getElementById("calcEUR").textContent =
+          eurAmount.toLocaleString("es-VE", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        document.getElementById("calcUSDT").textContent =
+          usdtAmount.toLocaleString("es-VE", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
 
-            if (!currentPrices.bcv_usd || !currentPrices.usdt_avg) return;
+        document.getElementById("rateVES").textContent =
+          currency === "VES" ? "Monto original" : "";
+        document.getElementById("rateBCV").textContent =
+          currency === "USD"
+            ? "Monto original"
+            : `1 USD = ${currentPrices.bcv_usd.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES`;
+        document.getElementById("rateEUR").textContent =
+          currency === "EUR"
+            ? "Monto original"
+            : `1 EUR = ${currentPrices.bcv_eur.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES`;
+        document.getElementById("rateUSDT").textContent =
+          currency === "USDT"
+            ? "Monto original"
+            : `1 USDT = ${currentPrices.usdt_avg.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES`;
 
-            let vesAmount, bcvAmount, eurAmount, usdtAmount;
-
-            if (currency === 'USD') {
-                vesAmount = amount * currentPrices.bcv_usd;
-                bcvAmount = amount;
-                eurAmount = (amount * currentPrices.bcv_usd) / currentPrices.bcv_eur;
-                usdtAmount = (amount * currentPrices.bcv_usd) / currentPrices.usdt_avg;
-            } else if (currency === 'EUR') {
-                vesAmount = amount * currentPrices.bcv_eur;
-                bcvAmount = (amount * currentPrices.bcv_eur) / currentPrices.bcv_usd;
-                eurAmount = amount;
-                usdtAmount = (amount * currentPrices.bcv_eur) / currentPrices.usdt_avg;
-            } else if (currency === 'VES') {
-                vesAmount = amount;
-                bcvAmount = amount / currentPrices.bcv_usd;
-                eurAmount = amount / currentPrices.bcv_eur;
-                usdtAmount = amount / currentPrices.usdt_avg;
-            } else if (currency === 'USDT') {
-                vesAmount = amount * currentPrices.usdt_avg;
-                bcvAmount = (amount * currentPrices.usdt_avg) / currentPrices.bcv_usd;
-                eurAmount = (amount * currentPrices.usdt_avg) / currentPrices.bcv_eur;
-                usdtAmount = amount;
-            }
-
-            document.getElementById('calcVES').textContent = vesAmount.toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            document.getElementById('calcBCV').textContent = bcvAmount.toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 4});
-            document.getElementById('calcEUR').textContent = eurAmount.toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 4});
-            document.getElementById('calcUSDT').textContent = usdtAmount.toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 4});
-
-            document.getElementById('rateVES').textContent = currency === 'VES' ? 'Monto original' : '';
-            document.getElementById('rateBCV').textContent = currency === 'USD' ? 'Monto original' : `1 USD = ${currentPrices.bcv_usd.toLocaleString('es-VE', {minimumFractionDigits: 2})} VES`;
-            document.getElementById('rateEUR').textContent = currency === 'EUR' ? 'Monto original' : `1 EUR = ${currentPrices.bcv_eur.toLocaleString('es-VE', {minimumFractionDigits: 2})} VES`;
-            document.getElementById('rateUSDT').textContent = currency === 'USDT' ? 'Monto original' : `1 USDT = ${currentPrices.usdt_avg.toLocaleString('es-VE', {minimumFractionDigits: 2})} VES`;
-
-            document.getElementById('resultVES').style.opacity = currency === 'VES' ? '0.6' : '1';
-            document.getElementById('resultBCV').style.opacity = currency === 'USD' ? '0.6' : '1';
-            document.getElementById('resultEUR').style.opacity = currency === 'EUR' ? '0.6' : '1';
-            document.getElementById('resultUSDT').style.opacity = currency === 'USDT' ? '0.6' : '1';
+        // Tasa Referencial
+        if (refAmount !== null) {
+          document.getElementById("calcREF").textContent =
+            refAmount.toLocaleString("es-VE", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            });
+          document.getElementById("rateREF").textContent =
+            `1 $ = ${refRate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES`;
+          document.getElementById("resultREF").style.opacity = "1";
+        } else {
+          document.getElementById("calcREF").textContent = "--";
+          document.getElementById("rateREF").textContent = "--";
+          document.getElementById("resultREF").style.opacity = "0.6";
         }
 
-        let priceChart, brechaChart;
+        document.getElementById("resultVES").style.opacity =
+          currency === "VES" ? "0.6" : "1";
+        document.getElementById("resultBCV").style.opacity =
+          currency === "USD" ? "0.6" : "1";
+        document.getElementById("resultEUR").style.opacity =
+          currency === "EUR" ? "0.6" : "1";
+        document.getElementById("resultUSDT").style.opacity =
+          currency === "USDT" ? "0.6" : "1";
+      }
 
-        function initCharts() {
-            const commonOptions = {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { intersect: false, mode: 'index' },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        padding: 12,
-                        displayColors: true
-                    }
+      let priceChart, brechaChart;
+
+      function initCharts() {
+        const commonOptions = {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { intersect: false, mode: "index" },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "rgba(0, 0, 0, 0.8)",
+              padding: 12,
+              displayColors: true,
+            },
+          },
+          scales: {
+            x: {
+              grid: { color: "rgba(255, 255, 255, 0.05)" },
+              ticks: { color: "#888", maxTicksLimit: 8 },
+            },
+            y: {
+              grid: { color: "rgba(255, 255, 255, 0.05)" },
+              ticks: { color: "#888" },
+            },
+          },
+        };
+
+        priceChart = new Chart(
+          document.getElementById("priceChart").getContext("2d"),
+          {
+            type: "line",
+            data: {
+              labels: [],
+              datasets: [
+                {
+                  label: "USDT Binance",
+                  data: [],
+                  borderColor: "#ffd93d",
+                  borderWidth: 3,
+                  fill: false,
+                  tension: 0.4,
+                  pointRadius: 2,
                 },
-                scales: {
-                    x: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#888', maxTicksLimit: 8 }
-                    },
-                    y: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#888' }
-                    }
-                }
-            };
-
-            priceChart = new Chart(document.getElementById('priceChart').getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        { label: 'USDT Binance', data: [], borderColor: '#ffd93d', borderWidth: 3, fill: false, tension: 0.4, pointRadius: 2 },
-                        { label: 'Dolar BCV', data: [], borderColor: '#00d9ff', borderWidth: 2, fill: false, tension: 0.1, pointRadius: 2, borderDash: [5, 5] },
-                        { label: 'Euro BCV', data: [], borderColor: '#a55eea', borderWidth: 2, fill: false, tension: 0.1, pointRadius: 2, borderDash: [5, 5] }
-                    ]
+                {
+                  label: "Dolar BCV",
+                  data: [],
+                  borderColor: "#00d9ff",
+                  borderWidth: 2,
+                  fill: false,
+                  tension: 0.1,
+                  pointRadius: 2,
+                  borderDash: [5, 5],
                 },
-                options: commonOptions
-            });
-
-            brechaChart = new Chart(document.getElementById('brechaChart').getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        { label: 'USDT vs $ BCV', data: [], borderColor: '#ffd93d', borderWidth: 2, fill: false, tension: 0.4, pointRadius: 2 },
-                        { label: 'USDT vs € BCV', data: [], borderColor: '#ff9f43', borderWidth: 2, fill: false, tension: 0.4, pointRadius: 2 },
-                        { label: '€ BCV vs $ BCV', data: [], borderColor: '#a55eea', borderWidth: 2, fill: true, backgroundColor: 'rgba(165, 94, 234, 0.1)', tension: 0.4, pointRadius: 2 }
-                    ]
+                {
+                  label: "Euro BCV",
+                  data: [],
+                  borderColor: "#a55eea",
+                  borderWidth: 2,
+                  fill: false,
+                  tension: 0.1,
+                  pointRadius: 2,
+                  borderDash: [5, 5],
                 },
-                options: {
-                    ...commonOptions,
-                    scales: {
-                        ...commonOptions.scales,
-                        y: {
-                            ...commonOptions.scales.y,
-                            ticks: { color: '#888', callback: v => v.toFixed(1) + '%' }
-                        }
-                    }
-                }
-            });
-        }
+              ],
+            },
+            options: commonOptions,
+          },
+        );
 
-        function updateUI(data) {
-            currentPrices.bcv_usd = data.bcv_usd;
-            currentPrices.bcv_eur = data.bcv_eur;
-            currentPrices.usdt_avg = data.usdt_avg;
+        brechaChart = new Chart(
+          document.getElementById("brechaChart").getContext("2d"),
+          {
+            type: "line",
+            data: {
+              labels: [],
+              datasets: [
+                {
+                  label: "USDT vs $ BCV",
+                  data: [],
+                  borderColor: "#ffd93d",
+                  borderWidth: 2,
+                  fill: false,
+                  tension: 0.4,
+                  pointRadius: 2,
+                },
+                {
+                  label: "USDT vs € BCV",
+                  data: [],
+                  borderColor: "#ff9f43",
+                  borderWidth: 2,
+                  fill: false,
+                  tension: 0.4,
+                  pointRadius: 2,
+                },
+                {
+                  label: "€ BCV vs $ BCV",
+                  data: [],
+                  borderColor: "#a55eea",
+                  borderWidth: 2,
+                  fill: true,
+                  backgroundColor: "rgba(165, 94, 234, 0.1)",
+                  tension: 0.4,
+                  pointRadius: 2,
+                },
+              ],
+            },
+            options: {
+              ...commonOptions,
+              scales: {
+                ...commonOptions.scales,
+                y: {
+                  ...commonOptions.scales.y,
+                  ticks: { color: "#888", callback: (v) => v.toFixed(1) + "%" },
+                },
+              },
+            },
+          },
+        );
+      }
 
-            calculateConversion();
+      function updateUI(data) {
+        currentPrices.bcv_usd = data.bcv_usd;
+        currentPrices.bcv_eur = data.bcv_eur;
+        currentPrices.usdt_avg = data.usdt_avg;
 
-            document.getElementById('usdtPrice').textContent = data.usdt_avg ? data.usdt_avg.toLocaleString('es-VE', {minimumFractionDigits: 2}) : '--';
-            document.getElementById('bcvPrice').textContent = data.bcv_usd ? data.bcv_usd.toLocaleString('es-VE', {minimumFractionDigits: 2}) : '--';
-            document.getElementById('eurPrice').textContent = data.bcv_eur ? data.bcv_eur.toLocaleString('es-VE', {minimumFractionDigits: 2}) : '--';
-            document.getElementById('brechaUsdtUsd').textContent = data.brecha_usdt_usd ? data.brecha_usdt_usd.toFixed(2) + '%' : '--';
-            document.getElementById('brechaUsdtEur').textContent = data.brecha_usdt_eur ? data.brecha_usdt_eur.toFixed(2) + '%' : '--';
-            document.getElementById('brechaEurUsd').textContent = data.brecha_eur_usd ? data.brecha_eur_usd.toFixed(2) + '%' : '--';
+        calculateConversion();
 
-            const date = new Date(data.timestamp);
-            document.getElementById('lastUpdate').textContent = 'Ultima actualizacion: ' + date.toLocaleTimeString('es-VE');
+        document.getElementById("usdtPrice").textContent = data.usdt_avg
+          ? data.usdt_avg.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : "--";
+        document.getElementById("bcvPrice").textContent = data.bcv_usd
+          ? data.bcv_usd.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : "--";
+        document.getElementById("eurPrice").textContent = data.bcv_eur
+          ? data.bcv_eur.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : "--";
+        document.getElementById("brechaUsdtUsd").textContent =
+          data.brecha_usdt_usd ? data.brecha_usdt_usd.toFixed(2) + "%" : "--";
+        document.getElementById("brechaUsdtEur").textContent =
+          data.brecha_usdt_eur ? data.brecha_usdt_eur.toFixed(2) + "%" : "--";
+        document.getElementById("brechaEurUsd").textContent =
+          data.brecha_eur_usd ? data.brecha_eur_usd.toFixed(2) + "%" : "--";
 
-            const timeLabel = date.toLocaleTimeString('es-VE', {hour: '2-digit', minute: '2-digit'});
+        const date = new Date(data.timestamp);
+        document.getElementById("lastUpdate").textContent =
+          "Ultima actualizacion: " + date.toLocaleDateString("es-VE") + " " + date.toLocaleTimeString("es-VE");
 
-            if (priceChart.data.labels.length > 50) {
-                priceChart.data.labels.shift();
-                priceChart.data.datasets.forEach(ds => ds.data.shift());
-                brechaChart.data.labels.shift();
-                brechaChart.data.datasets.forEach(ds => ds.data.shift());
-            }
-
-            priceChart.data.labels.push(timeLabel);
-            priceChart.data.datasets[0].data.push(data.usdt_avg);
-            priceChart.data.datasets[1].data.push(data.bcv_usd);
-            priceChart.data.datasets[2].data.push(data.bcv_eur);
-            priceChart.update('none');
-
-            brechaChart.data.labels.push(timeLabel);
-            brechaChart.data.datasets[0].data.push(data.brecha_usdt_usd);
-            brechaChart.data.datasets[1].data.push(data.brecha_usdt_eur);
-            brechaChart.data.datasets[2].data.push(data.brecha_eur_usd);
-            brechaChart.update('none');
-        }
-
-        async function loadHistory(start = null, end = null, limit = 100) {
-            try {
-                let url = '/api/history?limit=' + limit;
-                if (start) url += '&start=' + encodeURIComponent(start);
-                if (end) url += '&end=' + encodeURIComponent(end);
-
-                const response = await fetch(url);
-                const result = await response.json();
-                const history = result.data || [];
-
-                priceChart.data.labels = [];
-                priceChart.data.datasets.forEach(ds => ds.data = []);
-                brechaChart.data.labels = [];
-                brechaChart.data.datasets.forEach(ds => ds.data = []);
-
-                if (history.length > 0) {
-                    // Mostrar ultimos 50 registros en graficas
-                    const recentHistory = history.slice(-50);
-                    recentHistory.forEach(entry => {
-                        const date = new Date(entry.timestamp);
-                        const timeLabel = date.toLocaleTimeString('es-VE', {hour: '2-digit', minute: '2-digit'});
-
-                        priceChart.data.labels.push(timeLabel);
-                        priceChart.data.datasets[0].data.push(entry.usdt_avg);
-                        priceChart.data.datasets[1].data.push(entry.bcv_usd);
-                        priceChart.data.datasets[2].data.push(entry.bcv_eur);
-
-                        brechaChart.data.labels.push(timeLabel);
-                        brechaChart.data.datasets[0].data.push(entry.brecha_usdt_usd);
-                        brechaChart.data.datasets[1].data.push(entry.brecha_usdt_eur);
-                        brechaChart.data.datasets[2].data.push(entry.brecha_eur_usd);
-                    });
-
-                    const lastEntry = history[history.length - 1];
-                    displayedData = lastEntry;
-
-                    currentPrices.bcv_usd = lastEntry.bcv_usd;
-                    currentPrices.bcv_eur = lastEntry.bcv_eur;
-                    currentPrices.usdt_avg = lastEntry.usdt_avg;
-
-                    document.getElementById('usdtPrice').textContent = lastEntry.usdt_avg ? lastEntry.usdt_avg.toLocaleString('es-VE', {minimumFractionDigits: 2}) : '--';
-                    document.getElementById('bcvPrice').textContent = lastEntry.bcv_usd ? lastEntry.bcv_usd.toLocaleString('es-VE', {minimumFractionDigits: 2}) : '--';
-                    document.getElementById('eurPrice').textContent = lastEntry.bcv_eur ? lastEntry.bcv_eur.toLocaleString('es-VE', {minimumFractionDigits: 2}) : '--';
-                    document.getElementById('brechaUsdtUsd').textContent = lastEntry.brecha_usdt_usd ? lastEntry.brecha_usdt_usd.toFixed(2) + '%' : '--';
-                    document.getElementById('brechaUsdtEur').textContent = lastEntry.brecha_usdt_eur ? lastEntry.brecha_usdt_eur.toFixed(2) + '%' : '--';
-                    document.getElementById('brechaEurUsd').textContent = lastEntry.brecha_eur_usd ? lastEntry.brecha_eur_usd.toFixed(2) + '%' : '--';
-
-                    const date = new Date(lastEntry.timestamp);
-                    document.getElementById('lastUpdate').textContent = 'Ultima actualizacion: ' + date.toLocaleTimeString('es-VE');
-
-                    calculateConversion();
-                }
-
-                priceChart.update('none');
-                brechaChart.update('none');
-            } catch (error) {
-                console.error('Error cargando historial:', error);
-                showToast('Error al cargar el historial de precios.', 'error');
-            }
-        }
-
-        function getFilterDates(filter) {
-            const now = new Date();
-            let start = null;
-
-            switch (filter) {
-                case '1h':
-                    start = new Date(now.getTime() - 60 * 60 * 1000);
-                    break;
-                case '24h':
-                    start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-                    break;
-                case '7d':
-                    start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                    break;
-                case 'all':
-                    start = null;
-                    break;
-            }
-
-            return { start: start ? start.toISOString() : null, end: null };
-        }
-
-        function applyQuickFilter(filter, buttonElement) {
-            activeFilter = filter;
-
-            // Actualizar botones activos
-            document.querySelectorAll('.quick-filter-btn').forEach(btn => btn.classList.remove('active'));
-            if (buttonElement) {
-                buttonElement.classList.add('active');
-            }
-
-            // Limpiar campos de fecha custom
-            document.getElementById('filterStart').value = '';
-            document.getElementById('filterEnd').value = '';
-
-            const dates = getFilterDates(filter);
-            const limit = filter === 'all' ? 1000 : (filter === '7d' ? 500 : 100);
-            loadHistory(dates.start, dates.end, limit);
-        }
-
-        function applyCustomFilter() {
-            activeFilter = 'custom';
-
-            // Quitar clase active de los quick filters
-            document.querySelectorAll('.quick-filter-btn').forEach(btn => btn.classList.remove('active'));
-
-            const startInput = document.getElementById('filterStart').value;
-            const endInput = document.getElementById('filterEnd').value;
-
-            const start = startInput ? new Date(startInput).toISOString() : null;
-            const end = endInput ? new Date(endInput).toISOString() : null;
-
-            loadHistory(start, end, 500);
-        }
-
-        async function fetchInBackground() {
-            try {
-                const response = await fetch('/api/latest');
-                const data = await response.json();
-
-                if (data.timestamp) {
-                    cachedData = data;
-                    checkForNewData();
-                }
-            } catch (error) {
-                console.error('Error en actualizacion background:', error);
-            }
-        }
-
-        async function refreshOnLoad() {
-            const btn = document.getElementById('updateBtn');
-            const statusDot = document.getElementById('statusDot');
-            const statusText = document.getElementById('statusText');
-
-            btn.disabled = true;
-            statusDot.classList.add('loading');
-            statusText.textContent = 'Actualizando precios...';
-
-            try {
-                const response = await fetch('/api/refresh', { method: 'POST' });
-                const result = await response.json();
-
-                if (result.success && result.data) {
-                    cachedData = result.data;
-                    displayedData = result.data;
-                    updateUI(result.data);
-
-                    // Recargar historial con el filtro actual
-                    const dates = getFilterDates(activeFilter);
-                    const limit = activeFilter === 'all' ? 1000 : (activeFilter === '7d' ? 500 : 100);
-                    await loadHistory(dates.start, dates.end, limit);
-                } else if (!result.success) {
-                    showToast('No se pudieron actualizar los precios. Intenta de nuevo.', 'error');
-                }
-
-                statusDot.classList.remove('loading', 'error');
-                statusText.textContent = 'Conectado';
-            } catch (error) {
-                console.error('Error en refresh inicial:', error);
-                statusDot.classList.remove('loading');
-                statusDot.classList.add('error');
-                statusText.textContent = 'Error de conexion';
-                showToast('Error de conexion. Verifica tu internet e intenta de nuevo.', 'error');
-            } finally {
-                btn.disabled = false;
-            }
-        }
-
-        function checkForNewData() {
-            const btn = document.getElementById('updateBtn');
-
-            if (cachedData && cachedData.timestamp !== displayedData?.timestamp) {
-                btn.classList.add('has-new');
-            } else {
-                btn.classList.remove('has-new');
-            }
-        }
-
-        function showLatestData() {
-            const btn = document.getElementById('updateBtn');
-            const statusDot = document.getElementById('statusDot');
-            const statusText = document.getElementById('statusText');
-
-            if (cachedData && cachedData.timestamp) {
-                updateUI(cachedData);
-                displayedData = cachedData;
-                btn.classList.remove('has-new');
-                statusDot.classList.remove('loading', 'error');
-                statusText.textContent = 'Conectado';
-            } else {
-                // Si no hay datos en cache, cargar del servidor
-                btn.disabled = true;
-                statusDot.classList.add('loading');
-                statusText.textContent = 'Obteniendo datos...';
-
-                fetch('/api/latest')
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.timestamp) {
-                            cachedData = data;
-                            displayedData = data;
-                            updateUI(data);
-                        } else {
-                            showToast('No hay datos disponibles aun. Espera la primera actualizacion.', 'warning');
-                        }
-                        statusDot.classList.remove('loading', 'error');
-                        statusText.textContent = 'Conectado';
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        statusDot.classList.remove('loading');
-                        statusDot.classList.add('error');
-                        statusText.textContent = 'Error de conexion';
-                        showToast('Error de conexion. Verifica tu internet e intenta de nuevo.', 'error');
-                    })
-                    .finally(() => {
-                        btn.disabled = false;
-                        btn.classList.remove('has-new');
-                    });
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initCharts();
-
-            // Prevenir zoom con doble toque en iOS
-            let lastTouchEnd = 0;
-            document.addEventListener('touchend', (e) => {
-                const now = Date.now();
-                if (now - lastTouchEnd <= 300) {
-                    e.preventDefault();
-                }
-                lastTouchEnd = now;
-            }, { passive: false });
-
-            // Event listeners para botones de moneda
-            document.querySelectorAll('.calc-currency-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const currency = btn.dataset.currency;
-                    selectCurrency(currency);
-                });
-            });
-
-            // Event listener para input de monto
-            document.getElementById('calcAmount').addEventListener('input', calculateConversion);
-
-            // Event listeners para filtros rapidos
-            document.querySelectorAll('.quick-filter-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const filter = btn.dataset.filter;
-                    applyQuickFilter(filter, btn);
-                });
-            });
-
-            // Event listener para aplicar filtro custom
-            document.getElementById('applyFilterBtn').addEventListener('click', applyCustomFilter);
-
-            // Event listener para boton de actualizar
-            document.getElementById('updateBtn').addEventListener('click', showLatestData);
-
-            // Forzar actualizacion de precios al cargar la pagina
-            refreshOnLoad();
-
-            // Actualizar en background cada 60 segundos
-            setInterval(fetchInBackground, 60000);
+        const timeLabel = date.toLocaleTimeString("es-VE", {
+          hour: "2-digit",
+          minute: "2-digit",
         });
+
+        if (priceChart.data.labels.length > 50) {
+          priceChart.data.labels.shift();
+          priceChart.data.datasets.forEach((ds) => ds.data.shift());
+          brechaChart.data.labels.shift();
+          brechaChart.data.datasets.forEach((ds) => ds.data.shift());
+        }
+
+        priceChart.data.labels.push(timeLabel);
+        priceChart.data.datasets[0].data.push(data.usdt_avg);
+        priceChart.data.datasets[1].data.push(data.bcv_usd);
+        priceChart.data.datasets[2].data.push(data.bcv_eur);
+        priceChart.update("none");
+
+        brechaChart.data.labels.push(timeLabel);
+        brechaChart.data.datasets[0].data.push(data.brecha_usdt_usd);
+        brechaChart.data.datasets[1].data.push(data.brecha_usdt_eur);
+        brechaChart.data.datasets[2].data.push(data.brecha_eur_usd);
+        brechaChart.update("none");
+      }
+
+      async function loadHistory(start = null, end = null, limit = 100) {
+        try {
+          let url = "/api/history?limit=" + limit;
+          if (start) url += "&start=" + encodeURIComponent(start);
+          if (end) url += "&end=" + encodeURIComponent(end);
+
+          const response = await fetch(url);
+          const result = await response.json();
+          const history = result.data || [];
+
+          priceChart.data.labels = [];
+          priceChart.data.datasets.forEach((ds) => (ds.data = []));
+          brechaChart.data.labels = [];
+          brechaChart.data.datasets.forEach((ds) => (ds.data = []));
+
+          if (history.length > 0) {
+            // Mostrar ultimos 50 registros en graficas
+            const recentHistory = history.slice(-50);
+            recentHistory.forEach((entry) => {
+              const date = new Date(entry.timestamp);
+              const timeLabel = date.toLocaleTimeString("es-VE", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+
+              priceChart.data.labels.push(timeLabel);
+              priceChart.data.datasets[0].data.push(entry.usdt_avg);
+              priceChart.data.datasets[1].data.push(entry.bcv_usd);
+              priceChart.data.datasets[2].data.push(entry.bcv_eur);
+
+              brechaChart.data.labels.push(timeLabel);
+              brechaChart.data.datasets[0].data.push(entry.brecha_usdt_usd);
+              brechaChart.data.datasets[1].data.push(entry.brecha_usdt_eur);
+              brechaChart.data.datasets[2].data.push(entry.brecha_eur_usd);
+            });
+
+            const lastEntry = history[history.length - 1];
+            displayedData = lastEntry;
+
+            currentPrices.bcv_usd = lastEntry.bcv_usd;
+            currentPrices.bcv_eur = lastEntry.bcv_eur;
+            currentPrices.usdt_avg = lastEntry.usdt_avg;
+
+            document.getElementById("usdtPrice").textContent =
+              lastEntry.usdt_avg
+                ? lastEntry.usdt_avg.toLocaleString("es-VE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })
+                : "--";
+            document.getElementById("bcvPrice").textContent = lastEntry.bcv_usd
+              ? lastEntry.bcv_usd.toLocaleString("es-VE", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })
+              : "--";
+            document.getElementById("eurPrice").textContent = lastEntry.bcv_eur
+              ? lastEntry.bcv_eur.toLocaleString("es-VE", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })
+              : "--";
+            document.getElementById("brechaUsdtUsd").textContent =
+              lastEntry.brecha_usdt_usd
+                ? lastEntry.brecha_usdt_usd.toFixed(2) + "%"
+                : "--";
+            document.getElementById("brechaUsdtEur").textContent =
+              lastEntry.brecha_usdt_eur
+                ? lastEntry.brecha_usdt_eur.toFixed(2) + "%"
+                : "--";
+            document.getElementById("brechaEurUsd").textContent =
+              lastEntry.brecha_eur_usd
+                ? lastEntry.brecha_eur_usd.toFixed(2) + "%"
+                : "--";
+
+            const date = new Date(lastEntry.timestamp);
+            document.getElementById("lastUpdate").textContent =
+              "Ultima actualizacion: " + date.toLocaleDateString("es-VE") + " " + date.toLocaleTimeString("es-VE");
+
+            calculateConversion();
+          }
+
+          priceChart.update("none");
+          brechaChart.update("none");
+        } catch (error) {
+          console.error("Error cargando historial:", error);
+          showToast("Error al cargar el historial de precios.", "error");
+        }
+      }
+
+      function getFilterDates(filter) {
+        const now = new Date();
+        let start = null;
+
+        switch (filter) {
+          case "1h":
+            start = new Date(now.getTime() - 60 * 60 * 1000);
+            break;
+          case "24h":
+            start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            break;
+          case "7d":
+            start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case "all":
+            start = null;
+            break;
+        }
+
+        return { start: start ? start.toISOString() : null, end: null };
+      }
+
+      function applyQuickFilter(filter, buttonElement) {
+        activeFilter = filter;
+
+        // Actualizar botones activos
+        document
+          .querySelectorAll(".quick-filter-btn")
+          .forEach((btn) => btn.classList.remove("active"));
+        if (buttonElement) {
+          buttonElement.classList.add("active");
+        }
+
+        // Limpiar campos de fecha custom
+        document.getElementById("filterStart").value = "";
+        document.getElementById("filterEnd").value = "";
+
+        const dates = getFilterDates(filter);
+        const limit = filter === "all" ? 1000 : filter === "7d" ? 500 : 100;
+        loadHistory(dates.start, dates.end, limit);
+      }
+
+      function applyCustomFilter() {
+        activeFilter = "custom";
+
+        // Quitar clase active de los quick filters
+        document
+          .querySelectorAll(".quick-filter-btn")
+          .forEach((btn) => btn.classList.remove("active"));
+
+        const startInput = document.getElementById("filterStart").value;
+        const endInput = document.getElementById("filterEnd").value;
+
+        const start = startInput ? new Date(startInput).toISOString() : null;
+        const end = endInput ? new Date(endInput).toISOString() : null;
+
+        loadHistory(start, end, 500);
+      }
+
+      async function fetchInBackground() {
+        try {
+          const response = await fetch("/api/latest");
+          const data = await response.json();
+
+          if (data.timestamp) {
+            cachedData = data;
+            checkForNewData();
+          }
+        } catch (error) {
+          console.error("Error en actualizacion background:", error);
+        }
+      }
+
+      async function refreshOnLoad() {
+        const btn = document.getElementById("updateBtn");
+
+        btn.disabled = true;
+        btn.classList.remove("connected", "error");
+        btn.classList.add("loading");
+
+        try {
+          const response = await fetch("/api/refresh", { method: "POST" });
+          const result = await response.json();
+
+          if (result.success && result.data) {
+            cachedData = result.data;
+            displayedData = result.data;
+            updateUI(result.data);
+
+            // Recargar historial con el filtro actual
+            const dates = getFilterDates(activeFilter);
+            const limit =
+              activeFilter === "all" ? 1000 : activeFilter === "7d" ? 500 : 100;
+            await loadHistory(dates.start, dates.end, limit);
+          } else if (!result.success) {
+            showToast(
+              "No se pudieron actualizar los precios. Intenta de nuevo.",
+              "error",
+            );
+          }
+
+          btn.classList.remove("loading", "error");
+          btn.classList.add("connected");
+        } catch (error) {
+          console.error("Error en refresh inicial:", error);
+          btn.classList.remove("loading", "connected");
+          btn.classList.add("error");
+          showToast(
+            "Error de conexion. Verifica tu internet e intenta de nuevo.",
+            "error",
+          );
+        } finally {
+          btn.disabled = true;
+          btn.classList.remove("loading");
+        }
+      }
+
+      function checkForNewData() {
+        const btn = document.getElementById("updateBtn");
+
+        if (cachedData && cachedData.timestamp !== displayedData?.timestamp) {
+          btn.classList.add("has-new");
+          btn.disabled = false;
+        } else {
+          btn.classList.remove("has-new");
+          btn.disabled = true;
+        }
+      }
+
+      function showLatestData() {
+        const btn = document.getElementById("updateBtn");
+
+        if (cachedData && cachedData.timestamp) {
+          updateUI(cachedData);
+          displayedData = cachedData;
+          btn.classList.remove("has-new", "loading", "error");
+          btn.classList.add("connected");
+          btn.disabled = true;
+        } else {
+          // Si no hay datos en cache, cargar del servidor
+          btn.disabled = true;
+          btn.classList.remove("connected", "error");
+          btn.classList.add("loading");
+
+          fetch("/api/latest")
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.timestamp) {
+                cachedData = data;
+                displayedData = data;
+                updateUI(data);
+              } else {
+                showToast(
+                  "No hay datos disponibles aun. Espera la primera actualizacion.",
+                  "warning",
+                );
+              }
+              btn.classList.remove("loading", "error");
+              btn.classList.add("connected");
+            })
+            .catch((error) => {
+              console.error("Error:", error);
+              btn.classList.remove("loading", "connected");
+              btn.classList.add("error");
+              showToast(
+                "Error de conexion. Verifica tu internet e intenta de nuevo.",
+                "error",
+              );
+            })
+            .finally(() => {
+              btn.disabled = true;
+              btn.classList.remove("has-new", "loading");
+            });
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        initCharts();
+
+        // Prevenir zoom con doble toque en iOS
+        let lastTouchEnd = 0;
+        document.addEventListener(
+          "touchend",
+          (e) => {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 300) {
+              e.preventDefault();
+            }
+            lastTouchEnd = now;
+          },
+          { passive: false },
+        );
+
+        // Event listeners para botones de moneda
+        document.querySelectorAll(".calc-currency-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const currency = btn.dataset.currency;
+            selectCurrency(currency);
+          });
+        });
+
+        // Event listener para input de monto
+        document
+          .getElementById("calcAmount")
+          .addEventListener("input", calculateConversion);
+
+        // Event listener para input de tasa referencial
+        document
+          .getElementById("calcRefRate")
+          .addEventListener("input", calculateConversion);
+
+        // Event listeners para filtros rapidos
+        document.querySelectorAll(".quick-filter-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const filter = btn.dataset.filter;
+            applyQuickFilter(filter, btn);
+          });
+        });
+
+        // Event listener para aplicar filtro custom
+        document
+          .getElementById("applyFilterBtn")
+          .addEventListener("click", applyCustomFilter);
+
+        // Event listener para boton de actualizar
+        document
+          .getElementById("updateBtn")
+          .addEventListener("click", showLatestData);
+
+        // Forzar actualizacion de precios al cargar la pagina
+        refreshOnLoad();
+
+        // Actualizar en background cada 60 segundos
+        setInterval(fetchInBackground, 60000);
+      });
     </script>
-</body>
+  </body>
 </html>

@@ -204,6 +204,16 @@ def refresh_prices():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+def parse_iso_datetime(date_string):
+    """Parsea fecha ISO, manejando el sufijo Z de UTC. Devuelve datetime naive."""
+    if date_string.endswith('Z'):
+        date_string = date_string[:-1]
+    dt = datetime.fromisoformat(date_string)
+    # Remover timezone para comparar con fechas naive del historial
+    if dt.tzinfo is not None:
+        dt = dt.replace(tzinfo=None)
+    return dt
+
 @app.route('/api/history')
 def get_history():
     """
@@ -227,15 +237,15 @@ def get_history():
         for entry in history:
             if not entry.get('timestamp'):
                 continue
-            entry_time = datetime.fromisoformat(entry['timestamp'])
+            entry_time = parse_iso_datetime(entry['timestamp'])
 
             if start:
-                start_time = datetime.fromisoformat(start)
+                start_time = parse_iso_datetime(start)
                 if entry_time < start_time:
                     continue
 
             if end:
-                end_time = datetime.fromisoformat(end)
+                end_time = parse_iso_datetime(end)
                 if entry_time > end_time:
                     continue
 
@@ -253,10 +263,10 @@ def get_history():
         "offset": offset
     })
 
-if __name__ == '__main__':
-    os.makedirs('static', exist_ok=True)
+os.makedirs('static', exist_ok=True)
 
-    # Iniciar scheduler para actualizacion automatica cada 60 segundos
+def init_scheduler():
+    """Inicializa el scheduler una sola vez."""
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=update_prices_job, trigger="interval", seconds=60)
     scheduler.start()
@@ -267,6 +277,17 @@ if __name__ == '__main__':
 
     # Asegurar que el scheduler se detenga al cerrar la app
     atexit.register(lambda: scheduler.shutdown())
+    return scheduler
 
+# Detectar si estamos corriendo con Gunicorn o directamente con Python
+is_gunicorn = "gunicorn" in os.environ.get("SERVER_SOFTWARE", "")
+
+if is_gunicorn:
+    # En Gunicorn: iniciar scheduler al importar el modulo
+    scheduler = init_scheduler()
+
+if __name__ == '__main__':
+    # En local con python app.py: iniciar scheduler aqui
+    scheduler = init_scheduler()
     print("Servidor iniciando en http://localhost:5000")
     app.run(debug=True, port=5000, use_reloader=False)
