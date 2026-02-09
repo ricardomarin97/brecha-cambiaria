@@ -134,6 +134,7 @@
         justify-content: center;
         align-items: center;
         padding: 12px 20px;
+        min-height: 80px;
         background: rgba(22, 33, 62, 0.95);
         backdrop-filter: blur(10px);
         border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -1679,53 +1680,88 @@
         const originalWidth = captureArea.style.width;
         const originalMaxWidth = captureArea.style.maxWidth;
 
+        // Detectar iOS
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
         try {
           // Temporalmente ajustar ancho para captura tablet horizontal
           captureArea.style.width = "768px";
           captureArea.style.maxWidth = "768px";
 
+          // Esperar un momento para que el DOM se actualice
+          await new Promise(resolve => setTimeout(resolve, 100));
+
           const canvas = await html2canvas(captureArea, {
             backgroundColor: "#1a1a2e",
-            scale: 2,
+            scale: isIOS ? 1 : 2, // Menor escala en iOS para evitar problemas de memoria
             useCORS: true,
+            logging: false,
+            allowTaint: true,
+            removeContainer: true,
           });
 
           // Restaurar estilos originales
           captureArea.style.width = originalWidth;
           captureArea.style.maxWidth = originalMaxWidth;
 
-          // Convertir a blob
-          const blob = await new Promise((resolve) =>
-            canvas.toBlob(resolve, "image/png")
-          );
-
-          const file = new File([blob], "brecha-cambiaria.png", {
-            type: "image/png",
+          // Convertir a blob con calidad ajustada para iOS
+          const blob = await new Promise((resolve, reject) => {
+            try {
+              canvas.toBlob(
+                (b) => {
+                  if (b) resolve(b);
+                  else reject(new Error("No se pudo crear el blob"));
+                },
+                "image/png",
+                1.0
+              );
+            } catch (e) {
+              reject(e);
+            }
           });
 
           // Intentar usar Web Share API
-          if (navigator.share && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              title: "Brecha Cambiaria Venezuela",
-              text: "Tasas de cambio actualizadas",
-              files: [file],
-            });
-            showToast("Compartido exitosamente", "success");
+          if (navigator.share) {
+            try {
+              const file = new File([blob], "brecha-cambiaria.png", {
+                type: "image/png",
+              });
+
+              if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                  title: "Brecha Cambiaria Venezuela",
+                  text: "Tasas de cambio actualizadas",
+                  files: [file],
+                });
+                showToast("Compartido exitosamente", "success");
+                return;
+              }
+            } catch (shareError) {
+              console.log("Share con archivo fallo, intentando descarga:", shareError);
+            }
+          }
+
+          // Fallback: descargar imagen
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "brecha-cambiaria.png";
+
+          // En iOS Safari, abrir en nueva ventana
+          if (isIOS) {
+            window.open(url, "_blank");
+            showToast("Imagen abierta. Manten presionado para guardar.", "success", 4000);
           } else {
-            // Fallback: descargar imagen
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "brecha-cambiaria.png";
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
             showToast("Imagen descargada", "success");
           }
+
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
         } catch (error) {
           console.error("Error al compartir:", error);
-          showToast("Error al generar la captura", "error");
+          showToast("Error al generar la captura. Intenta de nuevo.", "error");
         } finally {
           // Restaurar estilos originales (por si hubo error antes)
           captureArea.style.width = originalWidth;
