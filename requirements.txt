@@ -4,3 +4,5 @@ requests
 beautifulsoup4
 APScheduler
 gunicorn
+python-telegram-bot
+python-dotenv
