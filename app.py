@@ -425,16 +425,13 @@ def run_telegram_bot():
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-    def run_bot():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    async def run_bot_async():
+        from telegram.ext import MessageHandler, filters
+        from datetime import time as dt_time
 
         application = Application.builder().token(BOT_TOKEN).build()
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CallbackQueryHandler(button_callback))
-
-        # Ignorar cualquier otro mensaje de texto
-        from telegram.ext import MessageHandler, filters
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ignore_messages))
 
         # Programar notificaciones (hora UTC)
@@ -442,8 +439,6 @@ def run_telegram_bot():
         # 2:00 PM Venezuela = 18:00 UTC
         # 10:00 PM Venezuela = 02:00 UTC
         job_queue = application.job_queue
-
-        from datetime import time as dt_time
         job_queue.run_daily(scheduled_job_wrapper, time=dt_time(hour=12, minute=0), name='morning')
         job_queue.run_daily(scheduled_job_wrapper, time=dt_time(hour=18, minute=0), name='afternoon')
         job_queue.run_daily(scheduled_job_wrapper, time=dt_time(hour=2, minute=0), name='night')
@@ -455,7 +450,22 @@ def run_telegram_bot():
         print("  - Notificaciones: 8:00 AM, 2:00 PM, 10:00 PM (Venezuela)")
         print("  - Verificacion de brecha: cada hora")
 
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
+        # Iniciar sin señales (compatible con threads)
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+
+        # Mantener el bot corriendo
+        while True:
+            await asyncio.sleep(3600)
+
+    def run_bot():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_bot_async())
+        except Exception as e:
+            print(f"Error en bot de Telegram: {e}")
 
     bot_thread = threading.Thread(target=run_bot, daemon=True)
     bot_thread.start()
