@@ -20,21 +20,125 @@ warnings.filterwarnings('ignore')
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# Archivos de datos
+# Configuracion
+DATABASE_URL = os.environ.get('DATABASE_URL')
+BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+BRECHA_CHANGE_THRESHOLD = 5.0
+
+# Archivos JSON (fallback si no hay PostgreSQL)
 HISTORY_FILE = 'price_history.json'
 SUBSCRIBERS_FILE = 'telegram_subscribers.json'
 LAST_BRECHA_FILE = 'last_brecha.json'
 
-# Configuracion Telegram
-BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-BRECHA_CHANGE_THRESHOLD = 5.0  # Umbral de cambio para alerta
+# ============== CONEXION POSTGRESQL ==============
 
-# Variable global para el bot
-telegram_bot = None
+def get_db_connection():
+    """Obtiene conexion a PostgreSQL"""
+    if not DATABASE_URL:
+        return None
+    try:
+        import psycopg2
+        # Render usa postgres:// pero psycopg2 necesita postgresql://
+        db_url = DATABASE_URL.replace('postgres://', 'postgresql://')
+        conn = psycopg2.connect(db_url)
+        return conn
+    except Exception as e:
+        print(f"Error conectando a PostgreSQL: {e}")
+        return None
+
+def init_database():
+    """Crea las tablas si no existen"""
+    conn = get_db_connection()
+    if not conn:
+        print("PostgreSQL no disponible, usando archivos JSON")
+        return False
+
+    try:
+        cur = conn.cursor()
+
+        # Tabla de historial de precios
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS price_history (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMPTZ NOT NULL,
+                bcv_usd DECIMAL(10,2),
+                bcv_eur DECIMAL(10,2),
+                usdt_avg DECIMAL(10,2),
+                brecha_usdt_usd DECIMAL(10,2),
+                brecha_usdt_eur DECIMAL(10,2),
+                brecha_eur_usd DECIMAL(10,2),
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Tabla de suscriptores de Telegram
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS telegram_subscribers (
+                id SERIAL PRIMARY KEY,
+                chat_id BIGINT UNIQUE NOT NULL,
+                subscribed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Tabla de configuracion (para guardar ultima brecha)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key VARCHAR(50) PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Indice para busquedas por fecha
+        cur.execute('''
+            CREATE INDEX IF NOT EXISTS idx_price_history_timestamp
+            ON price_history(timestamp DESC)
+        ''')
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("PostgreSQL inicializado correctamente")
+        return True
+    except Exception as e:
+        print(f"Error inicializando PostgreSQL: {e}")
+        return False
 
 # ============== FUNCIONES DE DATOS ==============
 
 def load_history():
+    """Carga historial de precios"""
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                SELECT timestamp, bcv_usd, bcv_eur, usdt_avg,
+                       brecha_usdt_usd, brecha_usdt_eur, brecha_eur_usd
+                FROM price_history
+                ORDER BY timestamp ASC
+            ''')
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+
+            history = []
+            for row in rows:
+                history.append({
+                    "timestamp": row[0].isoformat() + 'Z' if row[0] else None,
+                    "bcv_usd": float(row[1]) if row[1] else None,
+                    "bcv_eur": float(row[2]) if row[2] else None,
+                    "usdt_avg": float(row[3]) if row[3] else None,
+                    "brecha_usdt_usd": float(row[4]) if row[4] else None,
+                    "brecha_usdt_eur": float(row[5]) if row[5] else None,
+                    "brecha_eur_usd": float(row[6]) if row[6] else None
+                })
+            return history
+        except Exception as e:
+            print(f"Error cargando historial de PostgreSQL: {e}")
+            return []
+
+    # Fallback a JSON
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, 'r') as f:
@@ -43,11 +147,57 @@ def load_history():
             return []
     return []
 
-def save_history(history):
+def save_history_entry(data):
+    """Guarda un registro en el historial"""
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            timestamp = data.get('timestamp', '').replace('Z', '')
+            cur.execute('''
+                INSERT INTO price_history
+                (timestamp, bcv_usd, bcv_eur, usdt_avg, brecha_usdt_usd, brecha_usdt_eur, brecha_eur_usd)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ''', (
+                timestamp,
+                data.get('bcv_usd'),
+                data.get('bcv_eur'),
+                data.get('usdt_avg'),
+                data.get('brecha_usdt_usd'),
+                data.get('brecha_usdt_eur'),
+                data.get('brecha_eur_usd')
+            ))
+            conn.commit()
+            cur.close()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error guardando en PostgreSQL: {e}")
+            return False
+
+    # Fallback a JSON
+    history = load_history()
+    history.append(data)
     with open(HISTORY_FILE, 'w') as f:
         json.dump(history, f)
+    return True
 
 def load_subscribers():
+    """Carga lista de suscriptores de Telegram"""
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute('SELECT chat_id FROM telegram_subscribers')
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            return [row[0] for row in rows]
+        except Exception as e:
+            print(f"Error cargando suscriptores: {e}")
+            return []
+
+    # Fallback a JSON
     if os.path.exists(SUBSCRIBERS_FILE):
         try:
             with open(SUBSCRIBERS_FILE, 'r') as f:
@@ -56,11 +206,74 @@ def load_subscribers():
             return []
     return []
 
-def save_subscribers(subscribers):
-    with open(SUBSCRIBERS_FILE, 'w') as f:
-        json.dump(subscribers, f)
+def add_subscriber(chat_id):
+    """Agrega un suscriptor"""
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                INSERT INTO telegram_subscribers (chat_id)
+                VALUES (%s)
+                ON CONFLICT (chat_id) DO NOTHING
+            ''', (chat_id,))
+            conn.commit()
+            cur.close()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error agregando suscriptor: {e}")
+            return False
+
+    # Fallback a JSON
+    subscribers = load_subscribers()
+    if chat_id not in subscribers:
+        subscribers.append(chat_id)
+        with open(SUBSCRIBERS_FILE, 'w') as f:
+            json.dump(subscribers, f)
+    return True
+
+def remove_subscriber(chat_id):
+    """Remueve un suscriptor"""
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute('DELETE FROM telegram_subscribers WHERE chat_id = %s', (chat_id,))
+            conn.commit()
+            cur.close()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error removiendo suscriptor: {e}")
+            return False
+
+    # Fallback a JSON
+    subscribers = load_subscribers()
+    if chat_id in subscribers:
+        subscribers.remove(chat_id)
+        with open(SUBSCRIBERS_FILE, 'w') as f:
+            json.dump(subscribers, f)
+    return True
 
 def load_last_brecha():
+    """Carga la ultima brecha guardada"""
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT value FROM app_settings WHERE key = 'last_brecha'")
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            if row:
+                return json.loads(row[0])
+            return None
+        except Exception as e:
+            print(f"Error cargando ultima brecha: {e}")
+            return None
+
+    # Fallback a JSON
     if os.path.exists(LAST_BRECHA_FILE):
         try:
             with open(LAST_BRECHA_FILE, 'r') as f:
@@ -70,8 +283,28 @@ def load_last_brecha():
     return None
 
 def save_last_brecha(brecha_data):
+    """Guarda la ultima brecha"""
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES ('last_brecha', %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (key) DO UPDATE SET value = %s, updated_at = CURRENT_TIMESTAMP
+            ''', (json.dumps(brecha_data), json.dumps(brecha_data)))
+            conn.commit()
+            cur.close()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error guardando ultima brecha: {e}")
+            return False
+
+    # Fallback a JSON
     with open(LAST_BRECHA_FILE, 'w') as f:
         json.dump(brecha_data, f)
+    return True
 
 # ============== FUNCIONES DE PRECIOS ==============
 
@@ -372,8 +605,7 @@ def run_telegram_bot():
         elif query.data == "subscribe":
             subscribers = load_subscribers()
             if chat_id not in subscribers:
-                subscribers.append(chat_id)
-                save_subscribers(subscribers)
+                add_subscriber(chat_id)
                 await query.edit_message_text(
                     "✅ *Suscrito exitosamente*\n\n"
                     "Recibiras notificaciones:\n"
@@ -391,8 +623,7 @@ def run_telegram_bot():
         elif query.data == "unsubscribe":
             subscribers = load_subscribers()
             if chat_id in subscribers:
-                subscribers.remove(chat_id)
-                save_subscribers(subscribers)
+                remove_subscriber(chat_id)
                 await query.edit_message_text(
                     "🔕 *Desuscrito exitosamente*\n\n"
                     "Ya no recibiras notificaciones automaticas.",
@@ -477,9 +708,7 @@ def update_prices_job():
     print(f"[{datetime.now().isoformat()}] Actualizando precios...")
     try:
         current_data = fetch_and_calculate_prices()
-        history = load_history()
-        history.append(current_data)
-        save_history(history)
+        save_history_entry(current_data)
         print(f"[{datetime.now().isoformat()}] Precios actualizados")
     except Exception as e:
         print(f"[{datetime.now().isoformat()}] Error: {e}")
@@ -516,9 +745,7 @@ def get_latest():
 def refresh_prices():
     try:
         current_data = fetch_and_calculate_prices()
-        history = load_history()
-        history.append(current_data)
-        save_history(history)
+        save_history_entry(current_data)
         return jsonify({"success": True, "data": current_data})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -581,7 +808,8 @@ def init_scheduler():
     return scheduler
 
 def init_app():
-    """Inicializa scheduler y bot de Telegram"""
+    """Inicializa base de datos, scheduler y bot de Telegram"""
+    init_database()
     scheduler = init_scheduler()
     run_telegram_bot()
     return scheduler
