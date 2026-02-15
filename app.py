@@ -411,6 +411,20 @@ def run_telegram_bot():
     async def brecha_check_wrapper(context):
         await check_brecha_change(context.bot)
 
+    async def ignore_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Ignora cualquier mensaje de texto y recuerda usar botones"""
+        keyboard = [
+            [InlineKeyboardButton("📊 Consultar Brecha", callback_data="brecha")],
+            [
+                InlineKeyboardButton("🔔 Suscribirse", callback_data="subscribe"),
+                InlineKeyboardButton("🔕 Desuscribirse", callback_data="unsubscribe")
+            ]
+        ]
+        await update.message.reply_text(
+            "⚠️ Este bot solo funciona con botones.\n\nUsa las opciones de abajo:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
     def run_bot():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -418,6 +432,10 @@ def run_telegram_bot():
         application = Application.builder().token(BOT_TOKEN).build()
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CallbackQueryHandler(button_callback))
+
+        # Ignorar cualquier otro mensaje de texto
+        from telegram.ext import MessageHandler, filters
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ignore_messages))
 
         # Programar notificaciones (hora UTC)
         # 8:00 AM Venezuela = 12:00 UTC
