@@ -131,7 +131,7 @@ def fetch_and_calculate_prices():
     if bcv_prices['usd'] and bcv_prices['eur']:
         brecha_eur_usd = ((bcv_prices['eur'] - bcv_prices['usd']) / bcv_prices['usd']) * 100
 
-    timestamp = datetime.now().isoformat()
+    timestamp = datetime.utcnow().isoformat() + 'Z'
 
     return {
         "timestamp": timestamp,
