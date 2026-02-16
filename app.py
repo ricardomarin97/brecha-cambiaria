@@ -727,6 +727,10 @@ def update_prices_job():
 def index():
     return send_from_directory('static', 'index.html')
 
+@app.route('/sw.js')
+def service_worker():
+    return send_from_directory('static', 'sw.js')
+
 @app.route('/api/prices')
 def get_prices():
     history = load_history()
