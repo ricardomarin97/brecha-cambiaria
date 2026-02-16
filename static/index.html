@@ -517,6 +517,12 @@
         color: #f0b90b;
       }
 
+      .calc-currency-btn.active.ref-btn {
+        border-color: #ff6b6b;
+        background: rgba(255, 107, 107, 0.1);
+        color: #ff6b6b;
+      }
+
       .calc-results {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -825,6 +831,14 @@
               >
                 € BCV
               </button>
+                            <button
+                type="button"
+                class="calc-currency-btn ref-btn"
+                id="btnREF"
+                data-currency="REF"
+              >
+                REF
+              </button>
               <button
                 type="button"
                 class="calc-currency-btn ves-btn"
@@ -851,7 +865,7 @@
             </div>
           </div>
           <div class="calc-input-wrapper">
-            <label class="calc-label" for="calcRefRate">Tasa Referencial (VES) (Opcional)</label>
+            <label class="calc-label" for="calcRefRate">Tasa Referencial (Bs/$)</label>
             <div class="calc-input-container">
               <input
                 type="number"
@@ -888,7 +902,7 @@
             <div class="calc-result-rate" id="rateUSDT"></div>
           </div>
           <div class="calc-result-card" id="resultREF">
-            <div class="calc-result-label">Tasa Referencial (Opcional)</div>
+            <div class="calc-result-label">Tasa Referencial</div>
             <div class="calc-result-value ref" id="calcREF">--</div>
             <div class="calc-result-rate" id="rateREF"></div>
           </div>
@@ -1072,6 +1086,7 @@
           EUR: "€ BCV",
           VES: "Bs",
           USDT: "USDT",
+          REF: "$ REF",
         };
         document.getElementById("calcSuffix").textContent = suffixes[currency];
 
@@ -1115,6 +1130,25 @@
           eurAmount = (amount * currentPrices.usdt_avg) / currentPrices.bcv_eur;
           usdtAmount = amount;
           refAmount = refRate ? (amount * currentPrices.usdt_avg) / refRate : null;
+        } else if (currency === "REF") {
+          if (!refRate) {
+            document.getElementById("calcVES").textContent = "--";
+            document.getElementById("calcBCV").textContent = "--";
+            document.getElementById("calcEUR").textContent = "--";
+            document.getElementById("calcUSDT").textContent = "--";
+            document.getElementById("calcREF").textContent = "--";
+            document.getElementById("rateVES").textContent = "Ingrese tasa referencial";
+            document.getElementById("rateBCV").textContent = "";
+            document.getElementById("rateEUR").textContent = "";
+            document.getElementById("rateUSDT").textContent = "";
+            document.getElementById("rateREF").textContent = "";
+            return;
+          }
+          vesAmount = amount * refRate;
+          bcvAmount = vesAmount / currentPrices.bcv_usd;
+          eurAmount = vesAmount / currentPrices.bcv_eur;
+          usdtAmount = vesAmount / currentPrices.usdt_avg;
+          refAmount = amount;
         }
 
         document.getElementById("calcVES").textContent =
@@ -1154,18 +1188,26 @@
             : `1 USDT = ${currentPrices.usdt_avg.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES`;
 
         // Tasa Referencial
-        if (refAmount !== null) {
+        if (currency === "REF") {
+          document.getElementById("calcREF").textContent =
+            refAmount.toLocaleString("es-VE", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            });
+          document.getElementById("rateREF").textContent = "Monto original";
+          document.getElementById("resultREF").style.opacity = "0.6";
+        } else if (refAmount !== null) {
           document.getElementById("calcREF").textContent =
             refAmount.toLocaleString("es-VE", {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             });
           document.getElementById("rateREF").textContent =
-            `1 $ = ${refRate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES`;
+            `1 $ REF = ${refRate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES`;
           document.getElementById("resultREF").style.opacity = "1";
         } else {
           document.getElementById("calcREF").textContent = "--";
-          document.getElementById("rateREF").textContent = "--";
+          document.getElementById("rateREF").textContent = "Ingrese tasa";
           document.getElementById("resultREF").style.opacity = "0.6";
         }
 
