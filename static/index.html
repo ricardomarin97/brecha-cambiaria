@@ -1036,7 +1036,7 @@
       let selectedCurrency = "USD";
       let cachedData = null; // Ultimo dato obtenido en background
       let displayedData = null; // Dato actualmente mostrado
-      let activeFilter = "7d"; // Filtro activo por defecto
+      let activeFilter = "24h"; // Filtro activo por defecto
 
       // Sistema de notificaciones toast
       function showToast(message, type = "error", duration = 5000) {
@@ -1518,8 +1518,9 @@
         }
 
         const dates = getFilterDates(filter);
-        const limit = filter === "7d" ? 500 : 100;
-        loadHistory(dates.start, dates.end, limit);
+        // Límites basados en actualizaciones cada 60 segundos
+        const limits = { "1h": 100, "24h": 1500, "7d": 11000 };
+        loadHistory(dates.start, dates.end, limits[filter] || 1500);
       }
 
 
@@ -1555,8 +1556,8 @@
 
             // Recargar historial con el filtro actual
             const dates = getFilterDates(activeFilter);
-            const limit = activeFilter === "7d" ? 500 : 100;
-            await loadHistory(dates.start, dates.end, limit);
+            const limits = { "1h": 100, "24h": 1500, "7d": 11000 };
+            await loadHistory(dates.start, dates.end, limits[activeFilter] || 1500);
           } else if (!result.success) {
             showToast(
               "No se pudieron actualizar los precios. Intenta de nuevo.",
