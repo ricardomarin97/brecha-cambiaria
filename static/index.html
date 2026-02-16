@@ -1710,101 +1710,120 @@
         const originalWidth = captureArea.style.width;
         const originalMaxWidth = captureArea.style.maxWidth;
 
-        // Detectar iOS
+        // Detectar iOS y Safari
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        const isIOSSafari = isIOS && isSafari;
+
+        const siteUrl = "https://brecha-cambiaria.com";
+        const shareText = "Tasas y Brechas de USDT con BCV actualizadas cada minuto";
 
         try {
-          // Temporalmente ajustar ancho para captura tablet horizontal
+          // Temporalmente ajustar ancho para captura
           captureArea.style.width = "425px";
           captureArea.style.maxWidth = "425px";
 
-          // Esperar un momento para que el DOM se actualice
           await new Promise(resolve => setTimeout(resolve, 100));
 
           const canvas = await html2canvas(captureArea, {
             backgroundColor: "#1a1a2e",
-            scale: isIOS ? 1 : 2, // Menor escala en iOS para evitar problemas de memoria
+            scale: isIOS ? 1 : 2,
             useCORS: true,
             logging: false,
             allowTaint: true,
             removeContainer: true,
           });
 
-          // Restaurar estilos originales
           captureArea.style.width = originalWidth;
           captureArea.style.maxWidth = originalMaxWidth;
 
-          // Convertir a blob con calidad ajustada para iOS
           const blob = await new Promise((resolve, reject) => {
-            try {
-              canvas.toBlob(
-                (b) => {
-                  if (b) resolve(b);
-                  else reject(new Error("No se pudo crear el blob"));
-                },
-                "image/png",
-                1.0
-              );
-            } catch (e) {
-              reject(e);
-            }
+            canvas.toBlob(
+              (b) => b ? resolve(b) : reject(new Error("No se pudo crear el blob")),
+              "image/png",
+              1.0
+            );
           });
 
-          // Intentar usar Web Share API
-          const siteUrl = "https://brecha-cambiaria.com";
-          const shareText = "Tasas y Brechas de USDT con BCV actualizadas cada minuto";
+          const file = new File([blob], "brecha-cambiaria.png", { type: "image/png" });
 
-          if (navigator.share) {
+          // iOS Safari: compartir imagen + texto
+          if (isIOSSafari && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
             try {
-              const file = new File([blob], "brecha-cambiaria.png", {
-                type: "image/png",
+              await navigator.share({
+                files: [file],
+                text: shareText + "\n" + siteUrl,
               });
-
-              // Intentar compartir con imagen y URL
-              if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                  files: [file],
-                  title: "Brecha Cambiaria Venezuela",
-                  text: shareText + "\n" + siteUrl,
-                });
-                showToast("Compartido exitosamente", "success");
-                return;
-              }
-            } catch (shareError) {
-              if (shareError.name === "AbortError") return;
-              console.log("Share con archivo fallo:", shareError);
+              showToast("Compartido exitosamente", "success");
+              return;
+            } catch (e) {
+              if (e.name === "AbortError") return;
             }
+          }
 
-            // Intentar compartir solo URL (sin imagen)
+          // Otros navegadores con soporte de archivos
+          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({
+                files: [file],
+                title: "Brecha Cambiaria Venezuela",
+                text: shareText + "\n" + siteUrl,
+              });
+              showToast("Compartido exitosamente", "success");
+              return;
+            } catch (e) {
+              if (e.name === "AbortError") return;
+            }
+          }
+
+          // Compartir solo URL si no soporta archivos
+          if (navigator.share) {
             try {
               await navigator.share({
                 title: "Brecha Cambiaria Venezuela",
                 text: shareText,
                 url: siteUrl,
               });
-              showToast("Enlace compartido", "success");
+              showToast("Enlace compartido (descarga la imagen por separado)", "success");
+
+              // Descargar imagen después de compartir URL
+              const imgUrl = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = imgUrl;
+              a.download = "brecha-cambiaria.png";
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(imgUrl), 5000);
               return;
-            } catch (shareError) {
-              if (shareError.name === "AbortError") return;
-              console.log("Share de URL fallo:", shareError);
+            } catch (e) {
+              if (e.name === "AbortError") return;
             }
           }
 
-          // Fallback: descargar imagen y copiar URL
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "brecha-cambiaria.png";
+          // Fallback final: guardar imagen en Fotos (iOS) o descargar
+          const imgUrl = URL.createObjectURL(blob);
 
           if (isIOS) {
-            window.open(url, "_blank");
-            showToast("Imagen abierta. Manten presionado para guardar.", "success", 4000);
+            // Crear link temporal para guardar en fotos
+            const a = document.createElement("a");
+            a.href = imgUrl;
+            a.download = "brecha-cambiaria.png";
+            a.click();
+
+            // Copiar URL
+            try {
+              await navigator.clipboard.writeText(siteUrl);
+              showToast("Imagen guardada. URL copiada al portapapeles.", "success", 4000);
+            } catch (e) {
+              showToast("Imagen guardada. Comparte: " + siteUrl, "success", 5000);
+            }
           } else {
+            const a = document.createElement("a");
+            a.href = imgUrl;
+            a.download = "brecha-cambiaria.png";
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
 
-            // Copiar URL al portapapeles
             try {
               await navigator.clipboard.writeText(siteUrl);
               showToast("Imagen descargada y URL copiada", "success");
@@ -1813,7 +1832,7 @@
             }
           }
 
-          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          setTimeout(() => URL.revokeObjectURL(imgUrl), 5000);
         } catch (error) {
           console.error("Error al compartir:", error);
           showToast("Error al generar la captura. Intenta de nuevo.", "error");
