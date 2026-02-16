@@ -1751,24 +1751,40 @@
           });
 
           // Intentar usar Web Share API
+          const siteUrl = window.location.origin + window.location.pathname;
+
           if (navigator.share) {
             try {
               const file = new File([blob], "brecha-cambiaria.png", {
                 type: "image/png",
               });
 
+              // Intentar compartir con imagen
               if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                const siteUrl = window.location.origin + window.location.pathname;
                 await navigator.share({
                   title: "Brecha Cambiaria Venezuela",
-                  text: `Tasas y Brechas de USDT con BCV actualizadas cada minuto\n${siteUrl}`,
+                  text: `Tasas y Brechas de USDT con BCV actualizadas cada minuto`,
+                  url: siteUrl,
                   files: [file],
                 });
                 showToast("Compartido exitosamente", "success");
                 return;
               }
+
+              // Si no puede compartir archivos, compartir solo texto y URL
+              await navigator.share({
+                title: "Brecha Cambiaria Venezuela",
+                text: `Tasas y Brechas de USDT con BCV actualizadas cada minuto`,
+                url: siteUrl,
+              });
+              showToast("Enlace compartido", "success");
+              return;
             } catch (shareError) {
-              console.log("Share con archivo fallo, intentando descarga:", shareError);
+              // Si el usuario cancela el share, no mostrar error
+              if (shareError.name === "AbortError") {
+                return;
+              }
+              console.log("Share fallo, intentando descarga:", shareError);
             }
           }
 
