@@ -1758,9 +1758,10 @@
               });
 
               if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                const siteUrl = window.location.origin + window.location.pathname;
                 await navigator.share({
                   title: "Brecha Cambiaria Venezuela",
-                  text: "Tasas de cambio actualizadas",
+                  text: `Tasas de cambio actualizadas\n${siteUrl}`,
                   files: [file],
                 });
                 showToast("Compartido exitosamente", "success");
