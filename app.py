@@ -124,8 +124,16 @@ def load_history():
 
             history = []
             for row in rows:
+                # Convertir timestamp a formato ISO sin timezone info + Z
+                ts = row[0]
+                if ts:
+                    if ts.tzinfo is not None:
+                        ts = ts.replace(tzinfo=None)
+                    timestamp_str = ts.isoformat() + 'Z'
+                else:
+                    timestamp_str = None
                 history.append({
-                    "timestamp": row[0].isoformat() + 'Z' if row[0] else None,
+                    "timestamp": timestamp_str,
                     "bcv_usd": float(row[1]) if row[1] else None,
                     "bcv_eur": float(row[2]) if row[2] else None,
                     "usdt_avg": float(row[3]) if row[3] else None,
