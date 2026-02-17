@@ -731,6 +731,18 @@ def index():
 def service_worker():
     return send_from_directory('static', 'sw.js')
 
+@app.route('/sitemap.xml')
+def sitemap():
+    return send_from_directory('static', 'sitemap.xml')
+
+@app.route('/robots.txt')
+def robots():
+    return send_from_directory('static', 'robots.txt')
+
+@app.route('/og-image.png')
+def og_image():
+    return send_from_directory('static', 'og-image.png')
+
 @app.route('/api/prices')
 def get_prices():
     history = load_history()
