@@ -778,6 +778,34 @@ def favicon():
 def favicon_ico():
     return send_from_directory('static', 'favicon.png')
 
+@app.route('/openapi.json')
+def openapi_spec():
+    return send_from_directory('static', 'openapi.json')
+
+@app.route('/api')
+def api_docs():
+    return '''<!DOCTYPE html>
+<html>
+<head>
+    <title>API - Brecha Cambiaria Venezuela</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+        SwaggerUIBundle({
+            url: "/openapi.json",
+            dom_id: '#swagger-ui',
+            presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+            layout: "BaseLayout"
+        });
+    </script>
+</body>
+</html>'''
+
 @app.route('/api/prices')
 def get_prices():
     history = load_history()

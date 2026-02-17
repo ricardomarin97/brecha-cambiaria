@@ -1,0 +1,250 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Brecha Cambiaria Venezuela API",
+    "description": "API pública para consultar tasas de cambio y brechas cambiarias en Venezuela. Datos actualizados cada minuto desde Binance P2P y el Banco Central de Venezuela (BCV).",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Brecha Cambiaria",
+      "url": "https://brecha-cambiaria.com"
+    },
+    "license": {
+      "name": "Uso libre con atribución",
+      "url": "https://brecha-cambiaria.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://brecha-cambiaria.com",
+      "description": "Servidor de producción"
+    }
+  ],
+  "paths": {
+    "/api/prices": {
+      "get": {
+        "summary": "Obtener precios actuales",
+        "description": "Retorna el último registro de precios y brechas cambiarias",
+        "operationId": "getPrices",
+        "tags": ["Precios"],
+        "responses": {
+          "200": {
+            "description": "Precios actuales",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceData"
+                },
+                "example": {
+                  "timestamp": "2025-02-17T16:30:00Z",
+                  "bcv_usd": 51.48,
+                  "bcv_eur": 53.72,
+                  "usdt_avg": 52.15,
+                  "brecha_usdt_usd": 1.30,
+                  "brecha_usdt_eur": -2.92,
+                  "brecha_eur_usd": 4.35
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/latest": {
+      "get": {
+        "summary": "Obtener último registro",
+        "description": "Alias de /api/prices - Retorna el último registro de precios",
+        "operationId": "getLatest",
+        "tags": ["Precios"],
+        "responses": {
+          "200": {
+            "description": "Último registro de precios",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceData"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history": {
+      "get": {
+        "summary": "Obtener historial de precios",
+        "description": "Retorna el historial de precios con opciones de filtrado por fecha",
+        "operationId": "getHistory",
+        "tags": ["Historial"],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Fecha de inicio (formato ISO 8601)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "example": "2025-02-17T00:00:00Z"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "description": "Fecha de fin (formato ISO 8601)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Número máximo de registros a retornar",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "minimum": 1,
+              "maximum": 10000
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Número de registros a saltar (para paginación)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historial de precios",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PriceData"
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Total de registros disponibles"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats": {
+      "get": {
+        "summary": "Obtener estadísticas",
+        "description": "Retorna estadísticas generales del servicio",
+        "operationId": "getStats",
+        "tags": ["Estadísticas"],
+        "responses": {
+          "200": {
+            "description": "Estadísticas del servicio",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "subscribers": {
+                      "type": "integer",
+                      "description": "Número de suscriptores del bot de Telegram"
+                    },
+                    "total_records": {
+                      "type": "integer",
+                      "description": "Total de registros en el historial"
+                    },
+                    "oldest_record": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "newest_record": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "database": {
+                      "type": "string",
+                      "description": "Tipo de base de datos en uso"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PriceData": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fecha y hora del registro (UTC)"
+          },
+          "bcv_usd": {
+            "type": "number",
+            "description": "Tasa del Dólar BCV en Bolívares"
+          },
+          "bcv_eur": {
+            "type": "number",
+            "description": "Tasa del Euro BCV en Bolívares"
+          },
+          "usdt_avg": {
+            "type": "number",
+            "description": "Precio promedio USDT en Binance P2P (Bolívares)"
+          },
+          "brecha_usdt_usd": {
+            "type": "number",
+            "description": "Brecha porcentual entre USDT y Dólar BCV"
+          },
+          "brecha_usdt_eur": {
+            "type": "number",
+            "description": "Brecha porcentual entre USDT y Euro BCV"
+          },
+          "brecha_eur_usd": {
+            "type": "number",
+            "description": "Brecha porcentual entre Euro BCV y Dólar BCV"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Precios",
+      "description": "Consulta de precios actuales"
+    },
+    {
+      "name": "Historial",
+      "description": "Consulta de historial de precios"
+    },
+    {
+      "name": "Estadísticas",
+      "description": "Estadísticas del servicio"
+    }
+  ]
+}
