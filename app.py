@@ -461,6 +461,14 @@ def format_telegram_message(data, is_alert=False):
    • € BCV vs $ BCV: `{brecha_eur_usd:.2f}%`
 
 🕐 _{timestamp} (Hora Venezuela)_
+
+━━━━━━━━━━━━━━━━━━━━━
+_Tasas y Brechas de USDT con BCV actualizadas cada minuto. Incluye histórico y calculadora comparativa._
+
+_Información con fines educativos/informativos_
+
+🤖 Bot: t.me/brechacambiariabot
+🌐 https://brecha-cambiaria.com
 """
 
 def format_alert_message(data, old_brecha, new_brecha, change):
