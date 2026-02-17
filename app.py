@@ -739,9 +739,9 @@ def sitemap():
 def robots():
     return send_from_directory('static', 'robots.txt')
 
-@app.route('/og-image.png')
+@app.route('/og-image.jpg')
 def og_image():
-    return send_from_directory('static', 'og-image.png')
+    return send_from_directory('static', 'og-image.jpg')
 
 @app.route('/api/prices')
 def get_prices():
