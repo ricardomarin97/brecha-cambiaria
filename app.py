@@ -747,9 +747,36 @@ def sitemap():
 def robots():
     return send_from_directory('static', 'robots.txt')
 
+@app.route('/api/stats')
+def get_stats():
+    subscribers = load_subscribers()
+    history = load_history()
+
+    oldest = None
+    newest = None
+    if history:
+        oldest = history[0].get('timestamp')
+        newest = history[-1].get('timestamp')
+
+    return jsonify({
+        "subscribers": len(subscribers),
+        "total_records": len(history),
+        "oldest_record": oldest,
+        "newest_record": newest,
+        "database": "PostgreSQL" if get_db_connection() else "JSON"
+    })
+
 @app.route('/og-image.jpg')
 def og_image():
     return send_from_directory('static', 'og-image.jpg')
+
+@app.route('/favicon.png')
+def favicon():
+    return send_from_directory('static', 'favicon.png')
+
+@app.route('/favicon.ico')
+def favicon_ico():
+    return send_from_directory('static', 'favicon.png')
 
 @app.route('/api/prices')
 def get_prices():
