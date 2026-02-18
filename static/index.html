@@ -450,6 +450,26 @@
         font-family: 'JetBrains Mono', monospace;
       }
 
+      .legend-item.clickable {
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+        transition: all 0.2s;
+        user-select: none;
+      }
+
+      .legend-item.clickable:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .legend-item.clickable:not(.active) {
+        opacity: 0.4;
+      }
+
+      .legend-item.clickable:not(.active) .legend-color {
+        background: #555 !important;
+      }
+
       .legend-color {
         width: 16px;
         height: 3px;
@@ -998,15 +1018,15 @@
           <canvas id="priceChart"></canvas>
         </div>
         <div class="legend">
-          <div class="legend-item">
+          <div class="legend-item clickable active" data-chart="price" data-index="0">
             <div class="legend-color" style="background: #f0b90b"></div>
             <span>USDT</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item clickable active" data-chart="price" data-index="1">
             <div class="legend-color" style="background: #00ff00"></div>
             <span>USD BCV</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item clickable active" data-chart="price" data-index="2">
             <div class="legend-color" style="background: #00d4ff"></div>
             <span>EUR BCV</span>
           </div>
@@ -1019,15 +1039,15 @@
           <canvas id="brechaChart"></canvas>
         </div>
         <div class="legend">
-          <div class="legend-item">
+          <div class="legend-item clickable active" data-chart="brecha" data-index="0">
             <div class="legend-color" style="background: #ff4444"></div>
             <span>USDT/USD</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item clickable active" data-chart="brecha" data-index="1">
             <div class="legend-color" style="background: #ff8c00"></div>
             <span>USDT/EUR</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item clickable active" data-chart="brecha" data-index="2">
             <div class="legend-color" style="background: #00d4ff"></div>
             <span>EUR/USD</span>
           </div>
@@ -1484,10 +1504,24 @@
             // Mostrar todos los registros del filtro seleccionado
             history.forEach((entry) => {
               const date = new Date(entry.timestamp);
-              const timeLabel = date.toLocaleTimeString("es-VE", {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
+              let timeLabel;
+
+              if (activeFilter === "7d") {
+                // Para vista semanal: mostrar día/mes hora:min
+                timeLabel = date.toLocaleDateString("es-VE", {
+                  day: "2-digit",
+                  month: "2-digit",
+                }) + " " + date.toLocaleTimeString("es-VE", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+              } else {
+                // Para vista diaria/horaria: solo hora:min
+                timeLabel = date.toLocaleTimeString("es-VE", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+              }
 
               priceChart.data.labels.push(timeLabel);
               priceChart.data.datasets[0].data.push(entry.usdt_avg);
@@ -1760,6 +1794,25 @@
         document
           .getElementById("shareBtn")
           .addEventListener("click", shareCapture);
+
+        // Event listeners para toggle de leyendas
+        document.querySelectorAll(".legend-item.clickable").forEach((item) => {
+          item.addEventListener("click", () => {
+            const chartType = item.dataset.chart;
+            const index = parseInt(item.dataset.index);
+            const chart = chartType === "price" ? priceChart : brechaChart;
+
+            // Toggle visibilidad del dataset
+            const meta = chart.getDatasetMeta(index);
+            meta.hidden = !meta.hidden;
+
+            // Toggle clase active
+            item.classList.toggle("active", !meta.hidden);
+
+            // Actualizar gráfica
+            chart.update();
+          });
+        });
 
         // Forzar actualizacion de precios al cargar la pagina
         refreshOnLoad();
