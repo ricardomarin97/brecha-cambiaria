@@ -877,7 +877,12 @@ def get_history():
         history = filtered
 
     total = len(history)
-    history = history[offset:offset + limit]
+
+    # Si hay más registros que el límite, tomar los más recientes
+    if len(history) > limit:
+        history = history[-limit:]
+    elif offset > 0:
+        history = history[offset:offset + limit]
 
     return jsonify({"data": history, "total": total, "limit": limit, "offset": offset})
 
