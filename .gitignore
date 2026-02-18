@@ -10,3 +10,9 @@ telegram_subscribers.json
 last_brecha.json
 *.log
 .DS_Store
+.claude/
+
+# Archivos legacy (no utilizados)
+binance_p2p_ves.py
+grafica.html
+telegram_bot.py
