@@ -669,6 +669,77 @@
         margin-top: 10px;
       }
 
+      /* Seccion de Contacto */
+      .contact-section {
+        background: #0d0d0d;
+        border-radius: 4px;
+        padding: 25px 20px;
+        margin-bottom: 15px;
+        border: 1px solid #1a1a1a;
+        text-align: center;
+      }
+
+      .contact-icon {
+        width: 50px;
+        height: 50px;
+        margin: 0 auto 15px;
+        background: rgba(0, 255, 0, 0.1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .contact-icon svg {
+        width: 24px;
+        height: 24px;
+        fill: #00ff00;
+      }
+
+      .contact-title {
+        font-size: 0.9rem;
+        color: #bbb;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+      }
+
+      .contact-description {
+        font-size: 0.8rem;
+        color: #777;
+        margin-bottom: 18px;
+        line-height: 1.4;
+      }
+
+      .contact-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 24px;
+        border-radius: 4px;
+        border: 1px solid #00ff00;
+        background: rgba(0, 255, 0, 0.1);
+        color: #00ff00;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85rem;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .contact-btn:hover {
+        background: rgba(0, 255, 0, 0.2);
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+      }
+
+      .contact-btn svg {
+        width: 16px;
+        height: 16px;
+        fill: #00ff00;
+      }
+
       /* Filtro de rango de tiempo */
       .time-filter {
         background: #0d0d0d;
@@ -1052,6 +1123,23 @@
             <span>EUR/USD</span>
           </div>
         </div>
+      </div>
+
+      <!-- Seccion de Contacto -->
+      <div class="contact-section">
+        <div class="contact-icon">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+            <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+          </svg>
+        </div>
+        <h3 class="contact-title">Comentarios y Sugerencias</h3>
+        <p class="contact-description">¿Tienes ideas para mejorar la app o encontraste algun error? Escríbenos</p>
+        <a href="mailto:correo@ejemplo.com?subject=Brecha Cambiaria - Comentario" class="contact-btn">
+          <span>Enviar comentario</span>
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </a>
       </div>
 
       <div class="bottom-spacer"></div>

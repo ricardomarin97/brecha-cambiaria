@@ -290,6 +290,58 @@ def load_last_brecha():
             return None
     return None
 
+def load_last_bcv():
+    """Carga los ultimos valores del BCV guardados"""
+    LAST_BCV_FILE = 'last_bcv.json'
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT value FROM app_settings WHERE key = 'last_bcv'")
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            if row:
+                return json.loads(row[0])
+            return None
+        except Exception as e:
+            print(f"Error cargando ultimo BCV: {e}")
+            return None
+
+    # Fallback a JSON
+    if os.path.exists(LAST_BCV_FILE):
+        try:
+            with open(LAST_BCV_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return None
+    return None
+
+def save_last_bcv(bcv_data):
+    """Guarda los ultimos valores del BCV"""
+    LAST_BCV_FILE = 'last_bcv.json'
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES ('last_bcv', %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (key) DO UPDATE SET value = %s, updated_at = CURRENT_TIMESTAMP
+            ''', (json.dumps(bcv_data), json.dumps(bcv_data)))
+            conn.commit()
+            cur.close()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error guardando ultimo BCV: {e}")
+            return False
+
+    # Fallback a JSON
+    with open(LAST_BCV_FILE, 'w') as f:
+        json.dump(bcv_data, f)
+    return True
+
 def save_last_brecha(brecha_data):
     """Guarda la ultima brecha"""
     conn = get_db_connection()
@@ -482,6 +534,65 @@ def format_alert_message(data, old_brecha, new_brecha, change):
 """
     return base_msg + alert_info
 
+def format_bcv_update_message(data, old_bcv, changes):
+    """Formatea mensaje de actualizacion del BCV"""
+    try:
+        timestamp_str = data.get("timestamp", "")
+        if timestamp_str:
+            if timestamp_str.endswith('Z'):
+                timestamp_str = timestamp_str[:-1]
+            dt = datetime.fromisoformat(timestamp_str)
+            dt_venezuela = dt - timedelta(hours=4)
+            timestamp = dt_venezuela.strftime("%d/%m/%Y %H:%M:%S")
+        else:
+            timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    except:
+        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+    bcv_usd = data.get('bcv_usd') or 0
+    bcv_eur = data.get('bcv_eur') or 0
+    usdt_avg = data.get('usdt_avg') or 0
+    brecha_usdt_usd = data.get('brecha_usdt_usd') or 0
+    brecha_usdt_eur = data.get('brecha_usdt_eur') or 0
+    brecha_eur_usd = data.get('brecha_eur_usd') or 0
+
+    changes_text = ""
+    for currency, change_info in changes.items():
+        old_val = change_info['old']
+        new_val = change_info['new']
+        diff = new_val - old_val
+        diff_pct = (diff / old_val * 100) if old_val else 0
+        direction = "📈" if diff > 0 else "📉"
+        currency_name = "Dólar" if currency == 'usd' else "Euro"
+
+        changes_text += f"""
+{direction} *{currency_name} BCV actualizado*
+   • Anterior: `{old_val:,.2f} VES`
+   • Actual: `{new_val:,.2f} VES`
+   • Cambio: `{diff:+,.2f} VES ({diff_pct:+.2f}%)`
+"""
+
+    return f"""🔔 *ACTUALIZACION BCV*
+━━━━━━━━━━━━━━━━━━━━━
+{changes_text}
+💵 *Dólar BCV:* `{bcv_usd:,.2f} VES`
+💶 *Euro BCV:* `{bcv_eur:,.2f} VES`
+💰 *USDT Binance:* `{usdt_avg:,.2f} VES`
+
+📉 *Brechas Cambiarias:*
+   • USDT vs $ BCV: `{brecha_usdt_usd:.2f}%`
+   • USDT vs € BCV: `{brecha_usdt_eur:.2f}%`
+   • € BCV vs $ BCV: `{brecha_eur_usd:.2f}%`
+
+🕐 _{timestamp} (Hora Venezuela)_
+
+━━━━━━━━━━━━━━━━━━━━━
+_Información con fines educativos/informativos_
+
+🤖 Bot: t.me/brechacambiariabot
+🌐 https://brecha-cambiaria.com
+"""
+
 async def send_telegram_message(bot, chat_id, message):
     try:
         await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
@@ -557,6 +668,64 @@ async def check_brecha_change(bot):
 
     except Exception as e:
         print(f"[{datetime.now()}] Error verificando brecha: {e}")
+
+async def check_bcv_update(bot):
+    """Verifica si el BCV actualizo sus tasas y notifica"""
+    subscribers = load_subscribers()
+    if not subscribers:
+        return
+
+    try:
+        data = get_latest_data()
+        current_usd = data.get("bcv_usd")
+        current_eur = data.get("bcv_eur")
+
+        if current_usd is None and current_eur is None:
+            return
+
+        last_bcv_data = load_last_bcv()
+
+        if last_bcv_data is None:
+            # Primera vez, guardar y salir
+            save_last_bcv({
+                "bcv_usd": current_usd,
+                "bcv_eur": current_eur,
+                "timestamp": data.get("timestamp")
+            })
+            print(f"[{datetime.now()}] BCV inicial guardado: USD={current_usd}, EUR={current_eur}")
+            return
+
+        old_usd = last_bcv_data.get("bcv_usd")
+        old_eur = last_bcv_data.get("bcv_eur")
+
+        changes = {}
+
+        # Verificar cambio en dolar
+        if old_usd and current_usd and old_usd != current_usd:
+            changes['usd'] = {'old': old_usd, 'new': current_usd}
+
+        # Verificar cambio en euro
+        if old_eur and current_eur and old_eur != current_eur:
+            changes['eur'] = {'old': old_eur, 'new': current_eur}
+
+        if changes:
+            print(f"[{datetime.now()}] Actualizacion BCV detectada: {changes}")
+
+            message = format_bcv_update_message(data, last_bcv_data, changes)
+
+            for chat_id in subscribers:
+                await send_telegram_message(bot, chat_id, message)
+                print(f"[{datetime.now()}] Notificacion BCV enviada a {chat_id}")
+
+            # Actualizar ultimo BCV
+            save_last_bcv({
+                "bcv_usd": current_usd,
+                "bcv_eur": current_eur,
+                "timestamp": data.get("timestamp")
+            })
+
+    except Exception as e:
+        print(f"[{datetime.now()}] Error verificando actualizacion BCV: {e}")
 
 def run_telegram_bot():
     """Ejecuta el bot de Telegram en un thread separado"""
@@ -658,6 +827,9 @@ def run_telegram_bot():
     async def brecha_check_wrapper(context):
         await check_brecha_change(context.bot)
 
+    async def bcv_check_wrapper(context):
+        await check_bcv_update(context.bot)
+
     async def ignore_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Ignora cualquier mensaje de texto y recuerda usar botones"""
         keyboard = [
@@ -693,9 +865,13 @@ def run_telegram_bot():
         # Verificar cambio de brecha cada hora
         job_queue.run_repeating(brecha_check_wrapper, interval=3600, first=60, name='brecha_check')
 
+        # Verificar actualizacion del BCV cada 5 minutos
+        job_queue.run_repeating(bcv_check_wrapper, interval=300, first=30, name='bcv_check')
+
         print("Bot de Telegram iniciado")
         print("  - Notificaciones: 8:00 AM, 2:00 PM, 10:00 PM (Venezuela)")
         print("  - Verificacion de brecha: cada hora")
+        print("  - Verificacion de BCV: cada 5 minutos")
 
         # Iniciar sin señales (compatible con threads)
         await application.initialize()
