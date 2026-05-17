@@ -116,6 +116,7 @@ def load_history():
                 SELECT timestamp, bcv_usd, bcv_eur, usdt_avg,
                        brecha_usdt_usd, brecha_usdt_eur, brecha_eur_usd
                 FROM price_history
+                WHERE timestamp >= NOW() - INTERVAL '7 days'
                 ORDER BY timestamp ASC
             ''')
             rows = cur.fetchall()
