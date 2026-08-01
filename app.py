@@ -4,7 +4,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 from bs4 import BeautifulSoup
 import warnings
-from datetime import datetime, timedelta
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import json
 import os
 import atexit
@@ -23,7 +25,9 @@ CORS(app)
 # Configuracion
 DATABASE_URL = os.environ.get('DATABASE_URL')
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+REFRESH_API_KEY = os.environ.get('REFRESH_API_KEY')
 BRECHA_CHANGE_THRESHOLD = 5.0
+VE_TZ = ZoneInfo("America/Caracas")
 
 # Archivos JSON (fallback si no hay PostgreSQL)
 HISTORY_FILE = 'price_history.json'
@@ -32,72 +36,105 @@ LAST_BRECHA_FILE = 'last_brecha.json'
 
 # ============== CONEXION POSTGRESQL ==============
 
-def get_db_connection():
-    """Obtiene conexion a PostgreSQL"""
+_db_pool = None
+_db_pool_lock = threading.Lock()
+
+def _get_db_pool():
+    """Crea el pool de conexiones una sola vez y lo retorna"""
+    global _db_pool
     if not DATABASE_URL:
         return None
+    if _db_pool is None:
+        with _db_pool_lock:
+            if _db_pool is None:
+                try:
+                    from psycopg2 import pool
+                    # Render usa postgres:// pero psycopg2 necesita postgresql://
+                    db_url = DATABASE_URL.replace('postgres://', 'postgresql://')
+                    _db_pool = pool.ThreadedConnectionPool(minconn=1, maxconn=5, dsn=db_url)
+                except Exception as e:
+                    print(f"Error creando pool de PostgreSQL: {e}")
+                    return None
+    return _db_pool
+
+@contextmanager
+def db_connection():
+    """Presta una conexion del pool y la devuelve al salir.
+    Si hubo un error, la conexion se descarta para no reusar
+    una conexion en mal estado."""
+    db_pool = _get_db_pool()
+    if db_pool is None:
+        raise RuntimeError("PostgreSQL no disponible")
+    conn = db_pool.getconn()
     try:
-        import psycopg2
-        # Render usa postgres:// pero psycopg2 necesita postgresql://
-        db_url = DATABASE_URL.replace('postgres://', 'postgresql://')
-        conn = psycopg2.connect(db_url)
-        return conn
-    except Exception as e:
-        print(f"Error conectando a PostgreSQL: {e}")
-        return None
+        yield conn
+    except Exception:
+        db_pool.putconn(conn, close=True)
+        conn = None
+        raise
+    finally:
+        if conn is not None:
+            db_pool.putconn(conn)
+
+def has_database():
+    """Indica si hay PostgreSQL configurado y accesible"""
+    return _get_db_pool() is not None
 
 def init_database():
     """Crea las tablas si no existen"""
-    conn = get_db_connection()
-    if not conn:
+    if not has_database():
         print("PostgreSQL no disponible, usando archivos JSON")
         return False
 
     try:
-        cur = conn.cursor()
+        with db_connection() as conn:
+            cur = conn.cursor()
 
-        # Tabla de historial de precios
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS price_history (
-                id SERIAL PRIMARY KEY,
-                timestamp TIMESTAMPTZ NOT NULL,
-                bcv_usd DECIMAL(10,2),
-                bcv_eur DECIMAL(10,2),
-                usdt_avg DECIMAL(10,2),
-                brecha_usdt_usd DECIMAL(10,2),
-                brecha_usdt_eur DECIMAL(10,2),
-                brecha_eur_usd DECIMAL(10,2),
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+            # Tabla de historial de precios
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS price_history (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMPTZ NOT NULL,
+                    bcv_usd DECIMAL(10,2),
+                    bcv_eur DECIMAL(10,2),
+                    usdt_avg DECIMAL(10,2),
+                    brecha_usdt_usd DECIMAL(10,2),
+                    brecha_usdt_eur DECIMAL(10,2),
+                    brecha_eur_usd DECIMAL(10,2),
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
 
-        # Tabla de suscriptores de Telegram
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS telegram_subscribers (
-                id SERIAL PRIMARY KEY,
-                chat_id BIGINT UNIQUE NOT NULL,
-                subscribed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+            # Promedios de compra/venta de Binance por separado
+            cur.execute('ALTER TABLE price_history ADD COLUMN IF NOT EXISTS usdt_buy DECIMAL(10,2)')
+            cur.execute('ALTER TABLE price_history ADD COLUMN IF NOT EXISTS usdt_sell DECIMAL(10,2)')
 
-        # Tabla de configuracion (para guardar ultima brecha)
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS app_settings (
-                key VARCHAR(50) PRIMARY KEY,
-                value TEXT,
-                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+            # Tabla de suscriptores de Telegram
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS telegram_subscribers (
+                    id SERIAL PRIMARY KEY,
+                    chat_id BIGINT UNIQUE NOT NULL,
+                    subscribed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
 
-        # Indice para busquedas por fecha
-        cur.execute('''
-            CREATE INDEX IF NOT EXISTS idx_price_history_timestamp
-            ON price_history(timestamp DESC)
-        ''')
+            # Tabla de configuracion (para guardar ultima brecha)
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    key VARCHAR(50) PRIMARY KEY,
+                    value TEXT,
+                    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
 
-        conn.commit()
-        cur.close()
-        conn.close()
+            # Indice para busquedas por fecha
+            cur.execute('''
+                CREATE INDEX IF NOT EXISTS idx_price_history_timestamp
+                ON price_history(timestamp DESC)
+            ''')
+
+            conn.commit()
+            cur.close()
         print("PostgreSQL inicializado correctamente")
         return True
     except Exception as e:
@@ -106,48 +143,33 @@ def init_database():
 
 # ============== FUNCIONES DE DATOS ==============
 
-def load_history():
-    """Carga historial de precios"""
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute('''
-                SELECT timestamp, bcv_usd, bcv_eur, usdt_avg,
-                       brecha_usdt_usd, brecha_usdt_eur, brecha_eur_usd
-                FROM price_history
-                WHERE timestamp >= NOW() - INTERVAL '7 days'
-                ORDER BY timestamp ASC
-            ''')
-            rows = cur.fetchall()
-            cur.close()
-            conn.close()
+HISTORY_COLUMNS = '''timestamp, bcv_usd, bcv_eur, usdt_avg,
+                     brecha_usdt_usd, brecha_usdt_eur, brecha_eur_usd,
+                     usdt_buy, usdt_sell'''
 
-            history = []
-            for row in rows:
-                # Convertir timestamp a formato ISO sin timezone info + Z
-                ts = row[0]
-                if ts:
-                    if ts.tzinfo is not None:
-                        ts = ts.replace(tzinfo=None)
-                    timestamp_str = ts.isoformat() + 'Z'
-                else:
-                    timestamp_str = None
-                history.append({
-                    "timestamp": timestamp_str,
-                    "bcv_usd": float(row[1]) if row[1] else None,
-                    "bcv_eur": float(row[2]) if row[2] else None,
-                    "usdt_avg": float(row[3]) if row[3] else None,
-                    "brecha_usdt_usd": float(row[4]) if row[4] else None,
-                    "brecha_usdt_eur": float(row[5]) if row[5] else None,
-                    "brecha_eur_usd": float(row[6]) if row[6] else None
-                })
-            return history
-        except Exception as e:
-            print(f"Error cargando historial de PostgreSQL: {e}")
-            return []
+def _row_to_entry(row):
+    """Convierte una fila de price_history a dict con timestamp ISO + Z"""
+    ts = row[0]
+    if ts:
+        if ts.tzinfo is not None:
+            ts = ts.replace(tzinfo=None)
+        timestamp_str = ts.isoformat() + 'Z'
+    else:
+        timestamp_str = None
+    return {
+        "timestamp": timestamp_str,
+        "bcv_usd": float(row[1]) if row[1] is not None else None,
+        "bcv_eur": float(row[2]) if row[2] is not None else None,
+        "usdt_avg": float(row[3]) if row[3] is not None else None,
+        "brecha_usdt_usd": float(row[4]) if row[4] is not None else None,
+        "brecha_usdt_eur": float(row[5]) if row[5] is not None else None,
+        "brecha_eur_usd": float(row[6]) if row[6] is not None else None,
+        "usdt_buy": float(row[7]) if row[7] is not None else None,
+        "usdt_sell": float(row[8]) if row[8] is not None else None
+    }
 
-    # Fallback a JSON
+def _load_history_json():
+    """Carga el historial completo desde el archivo JSON (solo desarrollo)"""
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, 'r') as f:
@@ -156,36 +178,140 @@ def load_history():
             return []
     return []
 
+def load_history(start=None, end=None, limit=100, offset=0):
+    """Carga historial filtrado. start/end son datetime (UTC naive) opcionales.
+    Retorna (registros en orden ascendente, total de registros que calzan)."""
+    if has_database():
+        try:
+            where = []
+            params = []
+            if start:
+                where.append('timestamp >= %s')
+                params.append(start)
+            if end:
+                where.append('timestamp <= %s')
+                params.append(end)
+            where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(f'SELECT COUNT(*) FROM price_history {where_sql}', params)
+                total = cur.fetchone()[0]
+                cur.execute(f'''
+                    SELECT {HISTORY_COLUMNS}
+                    FROM price_history {where_sql}
+                    ORDER BY timestamp DESC
+                    LIMIT %s OFFSET %s
+                ''', params + [limit, offset])
+                rows = cur.fetchall()
+                cur.close()
+
+            history = [_row_to_entry(row) for row in rows]
+            history.reverse()  # el API entrega orden ascendente
+            return history, total
+        except Exception as e:
+            print(f"Error cargando historial de PostgreSQL: {e}")
+            return [], 0
+
+    # Fallback a JSON (desarrollo local)
+    history = _load_history_json()
+    if start or end:
+        filtered = []
+        for entry in history:
+            if not entry.get('timestamp'):
+                continue
+            entry_time = parse_iso_datetime(entry['timestamp'])
+            if start and entry_time < start:
+                continue
+            if end and entry_time > end:
+                continue
+            filtered.append(entry)
+        history = filtered
+    total = len(history)
+    if offset:
+        history = history[:max(total - offset, 0)]
+    return history[-limit:], total
+
+def load_latest_entry():
+    """Retorna el registro mas reciente o None"""
+    if has_database():
+        try:
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(f'''
+                    SELECT {HISTORY_COLUMNS}
+                    FROM price_history
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                ''')
+                row = cur.fetchone()
+                cur.close()
+            return _row_to_entry(row) if row else None
+        except Exception as e:
+            print(f"Error cargando ultimo registro: {e}")
+            return None
+
+    history = _load_history_json()
+    return history[-1] if history else None
+
+def get_history_stats():
+    """Retorna (total de registros, timestamp mas viejo, mas reciente)"""
+    if has_database():
+        try:
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute('SELECT COUNT(*), MIN(timestamp), MAX(timestamp) FROM price_history')
+                total, oldest, newest = cur.fetchone()
+                cur.close()
+
+            def fmt(ts):
+                if not ts:
+                    return None
+                if ts.tzinfo is not None:
+                    ts = ts.replace(tzinfo=None)
+                return ts.isoformat() + 'Z'
+            return total, fmt(oldest), fmt(newest)
+        except Exception as e:
+            print(f"Error cargando estadisticas: {e}")
+            return 0, None, None
+
+    history = _load_history_json()
+    if not history:
+        return 0, None, None
+    return len(history), history[0].get('timestamp'), history[-1].get('timestamp')
+
 def save_history_entry(data):
     """Guarda un registro en el historial"""
-    conn = get_db_connection()
-    if conn:
+    if has_database():
         try:
-            cur = conn.cursor()
-            timestamp = data.get('timestamp', '').replace('Z', '')
-            cur.execute('''
-                INSERT INTO price_history
-                (timestamp, bcv_usd, bcv_eur, usdt_avg, brecha_usdt_usd, brecha_usdt_eur, brecha_eur_usd)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ''', (
-                timestamp,
-                data.get('bcv_usd'),
-                data.get('bcv_eur'),
-                data.get('usdt_avg'),
-                data.get('brecha_usdt_usd'),
-                data.get('brecha_usdt_eur'),
-                data.get('brecha_eur_usd')
-            ))
-            conn.commit()
-            cur.close()
-            conn.close()
+            with db_connection() as conn:
+                cur = conn.cursor()
+                timestamp = data.get('timestamp', '').replace('Z', '')
+                cur.execute('''
+                    INSERT INTO price_history
+                    (timestamp, bcv_usd, bcv_eur, usdt_avg, brecha_usdt_usd,
+                     brecha_usdt_eur, brecha_eur_usd, usdt_buy, usdt_sell)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (
+                    timestamp,
+                    data.get('bcv_usd'),
+                    data.get('bcv_eur'),
+                    data.get('usdt_avg'),
+                    data.get('brecha_usdt_usd'),
+                    data.get('brecha_usdt_eur'),
+                    data.get('brecha_eur_usd'),
+                    data.get('usdt_buy'),
+                    data.get('usdt_sell')
+                ))
+                conn.commit()
+                cur.close()
             return True
         except Exception as e:
             print(f"Error guardando en PostgreSQL: {e}")
             return False
 
     # Fallback a JSON
-    history = load_history()
+    history = _load_history_json()
     history.append(data)
     with open(HISTORY_FILE, 'w') as f:
         json.dump(history, f)
@@ -193,14 +319,13 @@ def save_history_entry(data):
 
 def load_subscribers():
     """Carga lista de suscriptores de Telegram"""
-    conn = get_db_connection()
-    if conn:
+    if has_database():
         try:
-            cur = conn.cursor()
-            cur.execute('SELECT chat_id FROM telegram_subscribers')
-            rows = cur.fetchall()
-            cur.close()
-            conn.close()
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute('SELECT chat_id FROM telegram_subscribers')
+                rows = cur.fetchall()
+                cur.close()
             return [row[0] for row in rows]
         except Exception as e:
             print(f"Error cargando suscriptores: {e}")
@@ -217,18 +342,17 @@ def load_subscribers():
 
 def add_subscriber(chat_id):
     """Agrega un suscriptor"""
-    conn = get_db_connection()
-    if conn:
+    if has_database():
         try:
-            cur = conn.cursor()
-            cur.execute('''
-                INSERT INTO telegram_subscribers (chat_id)
-                VALUES (%s)
-                ON CONFLICT (chat_id) DO NOTHING
-            ''', (chat_id,))
-            conn.commit()
-            cur.close()
-            conn.close()
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute('''
+                    INSERT INTO telegram_subscribers (chat_id)
+                    VALUES (%s)
+                    ON CONFLICT (chat_id) DO NOTHING
+                ''', (chat_id,))
+                conn.commit()
+                cur.close()
             return True
         except Exception as e:
             print(f"Error agregando suscriptor: {e}")
@@ -244,14 +368,13 @@ def add_subscriber(chat_id):
 
 def remove_subscriber(chat_id):
     """Remueve un suscriptor"""
-    conn = get_db_connection()
-    if conn:
+    if has_database():
         try:
-            cur = conn.cursor()
-            cur.execute('DELETE FROM telegram_subscribers WHERE chat_id = %s', (chat_id,))
-            conn.commit()
-            cur.close()
-            conn.close()
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute('DELETE FROM telegram_subscribers WHERE chat_id = %s', (chat_id,))
+                conn.commit()
+                cur.close()
             return True
         except Exception as e:
             print(f"Error removiendo suscriptor: {e}")
@@ -265,107 +388,67 @@ def remove_subscriber(chat_id):
             json.dump(subscribers, f)
     return True
 
-def load_last_brecha():
-    """Carga la ultima brecha guardada"""
-    conn = get_db_connection()
-    if conn:
+def _load_setting(key, fallback_file):
+    """Carga un valor JSON de app_settings (o del archivo local en desarrollo)"""
+    if has_database():
         try:
-            cur = conn.cursor()
-            cur.execute("SELECT value FROM app_settings WHERE key = 'last_brecha'")
-            row = cur.fetchone()
-            cur.close()
-            conn.close()
-            if row:
-                return json.loads(row[0])
-            return None
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute('SELECT value FROM app_settings WHERE key = %s', (key,))
+                row = cur.fetchone()
+                cur.close()
+            return json.loads(row[0]) if row else None
         except Exception as e:
-            print(f"Error cargando ultima brecha: {e}")
+            print(f"Error cargando {key}: {e}")
             return None
 
     # Fallback a JSON
-    if os.path.exists(LAST_BRECHA_FILE):
+    if os.path.exists(fallback_file):
         try:
-            with open(LAST_BRECHA_FILE, 'r') as f:
+            with open(fallback_file, 'r') as f:
                 return json.load(f)
         except:
             return None
     return None
 
-def load_last_bcv():
-    """Carga los ultimos valores del BCV guardados"""
-    LAST_BCV_FILE = 'last_bcv.json'
-    conn = get_db_connection()
-    if conn:
+def _save_setting(key, data, fallback_file):
+    """Guarda un valor JSON en app_settings (o en archivo local en desarrollo)"""
+    if has_database():
         try:
-            cur = conn.cursor()
-            cur.execute("SELECT value FROM app_settings WHERE key = 'last_bcv'")
-            row = cur.fetchone()
-            cur.close()
-            conn.close()
-            if row:
-                return json.loads(row[0])
-            return None
-        except Exception as e:
-            print(f"Error cargando ultimo BCV: {e}")
-            return None
-
-    # Fallback a JSON
-    if os.path.exists(LAST_BCV_FILE):
-        try:
-            with open(LAST_BCV_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return None
-    return None
-
-def save_last_bcv(bcv_data):
-    """Guarda los ultimos valores del BCV"""
-    LAST_BCV_FILE = 'last_bcv.json'
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute('''
-                INSERT INTO app_settings (key, value, updated_at)
-                VALUES ('last_bcv', %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (key) DO UPDATE SET value = %s, updated_at = CURRENT_TIMESTAMP
-            ''', (json.dumps(bcv_data), json.dumps(bcv_data)))
-            conn.commit()
-            cur.close()
-            conn.close()
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute('''
+                    INSERT INTO app_settings (key, value, updated_at)
+                    VALUES (%s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+                ''', (key, json.dumps(data)))
+                conn.commit()
+                cur.close()
             return True
         except Exception as e:
-            print(f"Error guardando ultimo BCV: {e}")
+            print(f"Error guardando {key}: {e}")
             return False
 
     # Fallback a JSON
-    with open(LAST_BCV_FILE, 'w') as f:
-        json.dump(bcv_data, f)
+    with open(fallback_file, 'w') as f:
+        json.dump(data, f)
     return True
+
+def load_last_brecha():
+    """Carga la ultima brecha guardada"""
+    return _load_setting('last_brecha', LAST_BRECHA_FILE)
 
 def save_last_brecha(brecha_data):
     """Guarda la ultima brecha"""
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute('''
-                INSERT INTO app_settings (key, value, updated_at)
-                VALUES ('last_brecha', %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (key) DO UPDATE SET value = %s, updated_at = CURRENT_TIMESTAMP
-            ''', (json.dumps(brecha_data), json.dumps(brecha_data)))
-            conn.commit()
-            cur.close()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"Error guardando ultima brecha: {e}")
-            return False
+    return _save_setting('last_brecha', brecha_data, LAST_BRECHA_FILE)
 
-    # Fallback a JSON
-    with open(LAST_BRECHA_FILE, 'w') as f:
-        json.dump(brecha_data, f)
-    return True
+def load_last_bcv():
+    """Carga los ultimos valores del BCV guardados"""
+    return _load_setting('last_bcv', 'last_bcv.json')
+
+def save_last_bcv(bcv_data):
+    """Guarda los ultimos valores del BCV"""
+    return _save_setting('last_bcv', bcv_data, 'last_bcv.json')
 
 # ============== FUNCIONES DE PRECIOS ==============
 
@@ -458,39 +541,44 @@ def fetch_and_calculate_prices():
     if bcv_prices['usd'] and bcv_prices['eur']:
         brecha_eur_usd = ((bcv_prices['eur'] - bcv_prices['usd']) / bcv_prices['usd']) * 100
 
-    timestamp = datetime.utcnow().isoformat() + 'Z'
+    timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
 
     return {
         "timestamp": timestamp,
         "bcv_usd": bcv_prices['usd'],
         "bcv_eur": bcv_prices['eur'],
-        "usdt_avg": round(usdt_avg, 2) if usdt_avg else None,
-        "brecha_usdt_usd": round(brecha_usdt_usd, 2) if brecha_usdt_usd else None,
-        "brecha_usdt_eur": round(brecha_usdt_eur, 2) if brecha_usdt_eur else None,
-        "brecha_eur_usd": round(brecha_eur_usd, 2) if brecha_eur_usd else None
+        "usdt_avg": round(usdt_avg, 2) if usdt_avg is not None else None,
+        "usdt_buy": round(buy_avg, 2) if buy_avg is not None else None,
+        "usdt_sell": round(sell_avg, 2) if sell_avg is not None else None,
+        "brecha_usdt_usd": round(brecha_usdt_usd, 2) if brecha_usdt_usd is not None else None,
+        "brecha_usdt_eur": round(brecha_usdt_eur, 2) if brecha_usdt_eur is not None else None,
+        "brecha_eur_usd": round(brecha_eur_usd, 2) if brecha_eur_usd is not None else None
     }
 
 def get_latest_data():
-    history = load_history()
-    if history:
-        return history[-1]
+    latest = load_latest_entry()
+    if latest:
+        return latest
     return fetch_and_calculate_prices()
 
 # ============== FUNCIONES DE TELEGRAM ==============
 
-def format_telegram_message(data, is_alert=False):
+def format_venezuela_timestamp(timestamp_str):
+    """Convierte un timestamp ISO UTC a texto en hora de Venezuela"""
     try:
-        timestamp_str = data.get("timestamp", "")
         if timestamp_str:
             if timestamp_str.endswith('Z'):
                 timestamp_str = timestamp_str[:-1]
             dt = datetime.fromisoformat(timestamp_str)
-            dt_venezuela = dt - timedelta(hours=4)
-            timestamp = dt_venezuela.strftime("%d/%m/%Y %H:%M:%S")
-        else:
-            timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(VE_TZ).strftime("%d/%m/%Y %H:%M:%S")
     except:
-        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        pass
+    return datetime.now(VE_TZ).strftime("%d/%m/%Y %H:%M:%S")
+
+def format_telegram_message(data, is_alert=False):
+    timestamp = format_venezuela_timestamp(data.get("timestamp", ""))
 
     alert_header = "🚨 *ALERTA DE CAMBIO*\n" if is_alert else ""
 
@@ -537,18 +625,7 @@ def format_alert_message(data, old_brecha, new_brecha, change):
 
 def format_bcv_update_message(data, old_bcv, changes):
     """Formatea mensaje de actualizacion del BCV"""
-    try:
-        timestamp_str = data.get("timestamp", "")
-        if timestamp_str:
-            if timestamp_str.endswith('Z'):
-                timestamp_str = timestamp_str[:-1]
-            dt = datetime.fromisoformat(timestamp_str)
-            dt_venezuela = dt - timedelta(hours=4)
-            timestamp = dt_venezuela.strftime("%d/%m/%Y %H:%M:%S")
-        else:
-            timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    except:
-        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    timestamp = format_venezuela_timestamp(data.get("timestamp", ""))
 
     bcv_usd = data.get('bcv_usd') or 0
     bcv_eur = data.get('bcv_eur') or 0
@@ -927,20 +1004,14 @@ def robots():
 @app.route('/api/stats')
 def get_stats():
     subscribers = load_subscribers()
-    history = load_history()
-
-    oldest = None
-    newest = None
-    if history:
-        oldest = history[0].get('timestamp')
-        newest = history[-1].get('timestamp')
+    total, oldest, newest = get_history_stats()
 
     return jsonify({
         "subscribers": len(subscribers),
-        "total_records": len(history),
+        "total_records": total,
         "oldest_record": oldest,
         "newest_record": newest,
-        "database": "PostgreSQL" if get_db_connection() else "JSON"
+        "database": "PostgreSQL" if has_database() else "JSON"
     })
 
 @app.route('/og-image.jpg')
@@ -983,30 +1054,26 @@ def api_docs():
 </body>
 </html>'''
 
+EMPTY_ENTRY = {
+    "timestamp": None, "bcv_usd": None, "bcv_eur": None,
+    "usdt_avg": None, "usdt_buy": None, "usdt_sell": None,
+    "brecha_usdt_usd": None, "brecha_usdt_eur": None, "brecha_eur_usd": None
+}
+
 @app.route('/api/prices')
 def get_prices():
-    history = load_history()
-    if history:
-        return jsonify(history[-1])
-    return jsonify({
-        "timestamp": None, "bcv_usd": None, "bcv_eur": None,
-        "usdt_avg": None, "brecha_usdt_usd": None,
-        "brecha_usdt_eur": None, "brecha_eur_usd": None
-    })
+    latest = load_latest_entry()
+    return jsonify(latest if latest else EMPTY_ENTRY)
 
 @app.route('/api/latest')
 def get_latest():
-    history = load_history()
-    if history:
-        return jsonify(history[-1])
-    return jsonify({
-        "timestamp": None, "bcv_usd": None, "bcv_eur": None,
-        "usdt_avg": None, "brecha_usdt_usd": None,
-        "brecha_usdt_eur": None, "brecha_eur_usd": None
-    })
+    latest = load_latest_entry()
+    return jsonify(latest if latest else EMPTY_ENTRY)
 
 @app.route('/api/refresh', methods=['POST'])
 def refresh_prices():
+    if not REFRESH_API_KEY or request.headers.get('X-API-Key') != REFRESH_API_KEY:
+        return jsonify({"success": False, "error": "No autorizado"}), 401
     try:
         current_data = fetch_and_calculate_prices()
         save_history_entry(current_data)
@@ -1032,34 +1099,21 @@ def parse_iso_datetime(date_string):
         print(f"Error parseando fecha: {e}")
         return datetime.now()
 
+MAX_HISTORY_LIMIT = 15000
+
 @app.route('/api/history')
 def get_history():
-    history = load_history()
     start = request.args.get('start')
     end = request.args.get('end')
     limit = request.args.get('limit', 100, type=int)
     offset = request.args.get('offset', 0, type=int)
 
-    if start or end:
-        filtered = []
-        for entry in history:
-            if not entry.get('timestamp'):
-                continue
-            entry_time = parse_iso_datetime(entry['timestamp'])
-            if start and entry_time < parse_iso_datetime(start):
-                continue
-            if end and entry_time > parse_iso_datetime(end):
-                continue
-            filtered.append(entry)
-        history = filtered
+    limit = max(1, min(limit, MAX_HISTORY_LIMIT))
+    offset = max(0, offset)
+    start_dt = parse_iso_datetime(start) if start else None
+    end_dt = parse_iso_datetime(end) if end else None
 
-    total = len(history)
-
-    # Si hay más registros que el límite, tomar los más recientes
-    if len(history) > limit:
-        history = history[-limit:]
-    elif offset > 0:
-        history = history[offset:offset + limit]
+    history, total = load_history(start=start_dt, end=end_dt, limit=limit, offset=offset)
 
     return jsonify({"data": history, "total": total, "limit": limit, "offset": offset})
 

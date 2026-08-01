@@ -1739,19 +1739,20 @@
         btn.classList.add("loading");
 
         try {
-          const response = await fetch("/api/refresh", { method: "POST" });
-          const result = await response.json();
+          // El servidor actualiza precios cada 60s; basta con pedir el ultimo dato
+          const response = await fetch("/api/latest");
+          const data = await response.json();
 
-          if (result.success && result.data) {
-            cachedData = result.data;
-            displayedData = result.data;
-            updateUI(result.data);
+          if (data && data.timestamp) {
+            cachedData = data;
+            displayedData = data;
+            updateUI(data);
 
             // Recargar historial con el filtro actual
             const dates = getFilterDates(activeFilter);
             const limits = { "1h": 100, "24h": 1500, "7d": 11000 };
             await loadHistory(dates.start, dates.end, limits[activeFilter] || 1500);
-          } else if (!result.success) {
+          } else {
             showToast(
               "No se pudieron actualizar los precios. Intenta de nuevo.",
               "error",
