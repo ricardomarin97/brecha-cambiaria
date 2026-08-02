@@ -740,6 +740,30 @@
         fill: #00ff00;
       }
 
+      .promo-services {
+        font-size: 0.8rem;
+        color: #999;
+        margin-bottom: 18px;
+        line-height: 1.6;
+      }
+
+      .promo-services span {
+        color: #00ff00;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+      }
+
+      .promo-secondary {
+        margin-top: 16px;
+        font-size: 0.7rem;
+        color: #555;
+      }
+
+      .promo-secondary a {
+        color: #777;
+        text-decoration: underline;
+      }
+
       /* Filtro de rango de tiempo */
       .time-filter {
         background: #0d0d0d;
@@ -959,6 +983,32 @@
         </footer>
       </div>
 
+      <!-- Publicidad: servicios del autor -->
+      <div class="contact-section">
+        <div class="contact-icon">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+            <path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6z"/>
+          </svg>
+        </div>
+        <h3 class="contact-title">¿Tu negocio necesita tecnología?</h3>
+        <p class="promo-services">
+          Desarrollo soluciones a la medida, como esta app:<br />
+          <span>» Automatización de procesos</span><br />
+          <span>» Páginas web</span><br />
+          <span>» Aplicaciones móviles</span>
+        </p>
+        <a href="mailto:ricardoamarinr@gmail.com?subject=Consulta de servicios - Brecha Cambiaria" class="contact-btn" onclick="track('click_publicidad_servicios')">
+          <span>Solicitar información</span>
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </a>
+        <p class="promo-secondary">
+          ¿Comentarios o sugerencias sobre la app?
+          <a href="mailto:ricardoamarinr@gmail.com?subject=Brecha Cambiaria - Comentario" onclick="track('click_enviar_comentario')">Escríbenos</a>
+        </p>
+      </div>
+
       <div class="calculator">
         <h3 class="calc-title">🧮 Calculadora de Cambio</h3>
 
@@ -1123,23 +1173,6 @@
             <span>EUR/USD</span>
           </div>
         </div>
-      </div>
-
-      <!-- Seccion de Contacto -->
-      <div class="contact-section">
-        <div class="contact-icon">
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-            <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-          </svg>
-        </div>
-        <h3 class="contact-title">Comentarios y Sugerencias</h3>
-        <p class="contact-description">¿Tienes ideas para mejorar la app o encontraste algun error? Escríbenos</p>
-        <a href="mailto:ricardoamarinr@gmail.com?subject=Brecha Cambiaria - Comentario" class="contact-btn" onclick="track('click_enviar_comentario')">
-          <span>Enviar comentario</span>
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-          </svg>
-        </a>
       </div>
 
       <div class="bottom-spacer"></div>
