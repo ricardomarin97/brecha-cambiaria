@@ -49,9 +49,13 @@ workflows:
     environment:
       node: 22
       xcode: latest
+      # Firma con identidades guardadas en Codemagic (Code signing identities):
+      # certificado "brecha_dist_cert" + profile "brecha_appstore_profile"
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.brechacambiaria.app
+        certificates:
+          - brecha_dist_cert
+        provisioning_profiles:
+          - brecha_appstore_profile
     scripts:
       - name: Instalar dependencias y sincronizar frontend
         script: |
