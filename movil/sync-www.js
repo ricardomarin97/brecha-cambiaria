@@ -4,7 +4,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const API_URL = 'https://brecha-cambiaria.com';
+// OJO: con www — el dominio raiz responde 301 sin cabeceras CORS
+// y el WebView de la app bloquea esa redireccion
+const API_URL = 'https://www.brecha-cambiaria.com';
 
 const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(ROOT, 'static');
