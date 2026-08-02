@@ -2,7 +2,7 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <!-- SEO Primary Meta Tags -->
     <title>Brecha Cambiaria Venezuela - USDT vs Dólar BCV en Tiempo Real</title>
@@ -97,7 +97,11 @@
         background: #0a0a0a;
         color: #e0e0e0;
         min-height: 100vh;
-        padding: 15px;
+        /* safe areas: en la app movil evita el notch y la barra de estado */
+        padding: calc(15px + env(safe-area-inset-top, 0px))
+                 calc(15px + env(safe-area-inset-right, 0px))
+                 15px
+                 calc(15px + env(safe-area-inset-left, 0px));
       }
 
       .container {
@@ -245,7 +249,8 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 10px 20px;
+        /* safe area inferior: no chocar con el home indicator de iOS */
+        padding: 10px 20px calc(10px + env(safe-area-inset-bottom, 0px));
         min-height: 60px;
         background: #0a0a0a;
         border-top: 1px solid #1a1a1a;
@@ -254,7 +259,7 @@
       }
 
       .bottom-spacer {
-        height: 70px;
+        height: calc(70px + env(safe-area-inset-bottom, 0px));
       }
 
       .telegram-btn {
@@ -852,7 +857,7 @@
       /* Toast notifications */
       .toast-container {
         position: fixed;
-        top: 15px;
+        top: calc(15px + env(safe-area-inset-top, 0px));
         left: 50%;
         transform: translateX(-50%);
         z-index: 1100;
