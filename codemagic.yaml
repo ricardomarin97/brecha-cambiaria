@@ -7,8 +7,8 @@
 #   (Teams > Code signing identities > Android keystores)
 # - Android: variable GOOGLE_SERVICES_JSON (base64 del google-services.json
 #   de Firebase) en el grupo "firebase"
-# - iOS: conectar la App Store Connect API key con nombre "brecha_asc_key"
-#   (Teams > Integrations > Developer Portal)
+# - iOS: usa la App Store Connect API key ya conectada en Codemagic
+#   con el nombre "CodemagicAppleGansoft"
 
 workflows:
   android-release:
@@ -44,7 +44,7 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
     integrations:
-      app_store_connect: brecha_asc_key
+      app_store_connect: CodemagicAppleGansoft
     environment:
       node: 22
       xcode: latest
