@@ -8,3 +8,7 @@ python-telegram-bot
 python-dotenv
 psycopg2-binary
 tzdata
+google-auth
+httpx[http2]
+PyJWT
+cryptography

@@ -26,6 +26,15 @@ CORS(app)
 DATABASE_URL = os.environ.get('DATABASE_URL')
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 REFRESH_API_KEY = os.environ.get('REFRESH_API_KEY')
+# JSON del service account de Firebase (contenido inline o ruta a archivo)
+# Se usa para push a dispositivos Android via FCM
+FIREBASE_SERVICE_ACCOUNT = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
+# Credenciales APNs para push a dispositivos iOS (directo, sin Firebase)
+APNS_TEAM_ID = os.environ.get('APNS_TEAM_ID')
+APNS_KEY_ID = os.environ.get('APNS_KEY_ID')
+APNS_KEY = os.environ.get('APNS_KEY')  # contenido del .p8 inline o ruta a archivo
+APNS_TOPIC = os.environ.get('APNS_TOPIC', 'com.brechacambiaria.app')
+APNS_USE_SANDBOX = os.environ.get('APNS_USE_SANDBOX', '').lower() in ('1', 'true', 'yes')
 BRECHA_CHANGE_THRESHOLD = 5.0
 VE_TZ = ZoneInfo("America/Caracas")
 
@@ -33,6 +42,7 @@ VE_TZ = ZoneInfo("America/Caracas")
 HISTORY_FILE = 'price_history.json'
 SUBSCRIBERS_FILE = 'telegram_subscribers.json'
 LAST_BRECHA_FILE = 'last_brecha.json'
+DEVICE_TOKENS_FILE = 'device_tokens.json'
 
 # ============== CONEXION POSTGRESQL ==============
 
@@ -115,6 +125,16 @@ def init_database():
                     id SERIAL PRIMARY KEY,
                     chat_id BIGINT UNIQUE NOT NULL,
                     subscribed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # Tabla de dispositivos moviles (push notifications FCM)
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS device_tokens (
+                    id SERIAL PRIMARY KEY,
+                    token TEXT UNIQUE NOT NULL,
+                    platform VARCHAR(20),
+                    registered_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
 
@@ -388,6 +408,75 @@ def remove_subscriber(chat_id):
             json.dump(subscribers, f)
     return True
 
+def load_device_tokens():
+    """Carga los dispositivos registrados como lista de (token, platform)"""
+    if has_database():
+        try:
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute('SELECT token, platform FROM device_tokens')
+                rows = cur.fetchall()
+                cur.close()
+            return [(row[0], row[1]) for row in rows]
+        except Exception as e:
+            print(f"Error cargando tokens de dispositivos: {e}")
+            return []
+
+    # Fallback a JSON
+    if os.path.exists(DEVICE_TOKENS_FILE):
+        try:
+            with open(DEVICE_TOKENS_FILE, 'r') as f:
+                return [(d['token'], d.get('platform', 'unknown')) for d in json.load(f)]
+        except:
+            return []
+    return []
+
+def add_device_token(token, platform):
+    """Registra un token de dispositivo movil"""
+    if has_database():
+        try:
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute('''
+                    INSERT INTO device_tokens (token, platform)
+                    VALUES (%s, %s)
+                    ON CONFLICT (token) DO NOTHING
+                ''', (token, platform))
+                conn.commit()
+                cur.close()
+            return True
+        except Exception as e:
+            print(f"Error registrando dispositivo: {e}")
+            return False
+
+    # Fallback a JSON
+    devices = [{'token': t, 'platform': p} for t, p in load_device_tokens()]
+    if not any(d['token'] == token for d in devices):
+        devices.append({'token': token, 'platform': platform})
+        with open(DEVICE_TOKENS_FILE, 'w') as f:
+            json.dump(devices, f)
+    return True
+
+def remove_device_token(token):
+    """Elimina un token de dispositivo (invalido o desregistrado)"""
+    if has_database():
+        try:
+            with db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute('DELETE FROM device_tokens WHERE token = %s', (token,))
+                conn.commit()
+                cur.close()
+            return True
+        except Exception as e:
+            print(f"Error eliminando dispositivo: {e}")
+            return False
+
+    # Fallback a JSON
+    devices = [{'token': t, 'platform': p} for t, p in load_device_tokens() if t != token]
+    with open(DEVICE_TOKENS_FILE, 'w') as f:
+        json.dump(devices, f)
+    return True
+
 def _load_setting(key, fallback_file):
     """Carga un valor JSON de app_settings (o del archivo local en desarrollo)"""
     if has_database():
@@ -561,6 +650,164 @@ def get_latest_data():
         return latest
     return fetch_and_calculate_prices()
 
+# ============== NOTIFICACIONES PUSH (FCM) ==============
+
+_fcm_creds = None
+_fcm_project_id = None
+_fcm_lock = threading.Lock()
+
+def _get_fcm_credentials():
+    """Carga (una sola vez) las credenciales del service account de Firebase.
+    Retorna (credentials, project_id) o (None, None) si no esta configurado."""
+    global _fcm_creds, _fcm_project_id
+    if not FIREBASE_SERVICE_ACCOUNT:
+        return None, None
+    if _fcm_creds is None:
+        with _fcm_lock:
+            if _fcm_creds is None:
+                try:
+                    from google.oauth2 import service_account
+                    raw = FIREBASE_SERVICE_ACCOUNT.strip()
+                    if raw.startswith('{'):
+                        info = json.loads(raw)
+                    else:
+                        with open(raw, 'r') as f:
+                            info = json.load(f)
+                    _fcm_creds = service_account.Credentials.from_service_account_info(
+                        info, scopes=['https://www.googleapis.com/auth/firebase.messaging'])
+                    _fcm_project_id = info.get('project_id')
+                except Exception as e:
+                    print(f"Error cargando credenciales de Firebase: {e}")
+                    return None, None
+    return _fcm_creds, _fcm_project_id
+
+def _send_fcm(tokens, title, body):
+    """Envia push a dispositivos Android via FCM HTTP v1"""
+    if not tokens:
+        return 0
+    creds, project_id = _get_fcm_credentials()
+    if not creds or not project_id:
+        return 0
+
+    try:
+        from google.auth.transport.requests import Request as GoogleAuthRequest
+        if not creds.valid:
+            creds.refresh(GoogleAuthRequest())
+    except Exception as e:
+        print(f"Error refrescando token de FCM: {e}")
+        return 0
+
+    url = f'https://fcm.googleapis.com/v1/projects/{project_id}/messages:send'
+    headers = {
+        'Authorization': f'Bearer {creds.token}',
+        'Content-Type': 'application/json'
+    }
+
+    sent = 0
+    for token in tokens:
+        payload = {
+            "message": {
+                "token": token,
+                "notification": {"title": title, "body": body}
+            }
+        }
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                sent += 1
+            elif resp.status_code in (400, 404) and 'UNREGISTERED' in resp.text:
+                print(f"Token FCM invalido, eliminando: {token[:20]}...")
+                remove_device_token(token)
+            else:
+                print(f"Error FCM {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            print(f"Error enviando push FCM: {e}")
+    return sent
+
+_apns_jwt = {'token': None, 'issued_at': 0}
+
+def _get_apns_jwt():
+    """Genera (y cachea ~40 min) el JWT ES256 para autenticar contra APNs"""
+    import time
+    now = time.time()
+    if _apns_jwt['token'] and now - _apns_jwt['issued_at'] < 2400:
+        return _apns_jwt['token']
+
+    import jwt as pyjwt
+    raw = APNS_KEY.strip()
+    if raw.startswith('-----'):
+        key = raw
+    else:
+        with open(raw, 'r') as f:
+            key = f.read()
+
+    token = pyjwt.encode(
+        {'iss': APNS_TEAM_ID, 'iat': int(now)},
+        key,
+        algorithm='ES256',
+        headers={'kid': APNS_KEY_ID}
+    )
+    _apns_jwt['token'] = token
+    _apns_jwt['issued_at'] = now
+    return token
+
+def _send_apns(tokens, title, body):
+    """Envia push a dispositivos iOS directo via APNs (HTTP/2)"""
+    if not tokens:
+        return 0
+    if not (APNS_TEAM_ID and APNS_KEY_ID and APNS_KEY):
+        return 0
+
+    try:
+        import httpx
+        auth_token = _get_apns_jwt()
+    except Exception as e:
+        print(f"Error preparando APNs: {e}")
+        return 0
+
+    base = 'https://api.sandbox.push.apple.com' if APNS_USE_SANDBOX else 'https://api.push.apple.com'
+    headers = {
+        'authorization': f'bearer {auth_token}',
+        'apns-topic': APNS_TOPIC,
+        'apns-push-type': 'alert',
+        'apns-priority': '10'
+    }
+    payload = {'aps': {'alert': {'title': title, 'body': body}, 'sound': 'default'}}
+
+    sent = 0
+    try:
+        with httpx.Client(http2=True, timeout=10) as client:
+            for token in tokens:
+                try:
+                    resp = client.post(f'{base}/3/device/{token}', json=payload, headers=headers)
+                    if resp.status_code == 200:
+                        sent += 1
+                    elif resp.status_code == 410 or 'BadDeviceToken' in resp.text:
+                        print(f"Token APNs invalido, eliminando: {token[:20]}...")
+                        remove_device_token(token)
+                    else:
+                        print(f"Error APNs {resp.status_code}: {resp.text[:200]}")
+                except Exception as e:
+                    print(f"Error enviando push APNs: {e}")
+    except Exception as e:
+        print(f"Error de conexion APNs: {e}")
+    return sent
+
+def send_push_to_all(title, body):
+    """Envia una notificacion push a todos los dispositivos registrados:
+    Android via FCM, iOS via APNs. Retorna cuantas se enviaron."""
+    devices = load_device_tokens()
+    if not devices:
+        return 0
+
+    android_tokens = [t for t, p in devices if p != 'ios']
+    ios_tokens = [t for t, p in devices if p == 'ios']
+
+    sent = _send_fcm(android_tokens, title, body) + _send_apns(ios_tokens, title, body)
+    if sent:
+        print(f"[{datetime.now()}] Push enviado a {sent}/{len(devices)} dispositivos")
+    return sent
+
 # ============== FUNCIONES DE TELEGRAM ==============
 
 def format_venezuela_timestamp(timestamp_str):
@@ -708,8 +955,6 @@ async def send_scheduled_notification(bot):
 
 async def check_brecha_change(bot):
     subscribers = load_subscribers()
-    if not subscribers:
-        return
 
     try:
         data = get_latest_data()
@@ -739,6 +984,11 @@ async def check_brecha_change(bot):
                 await send_telegram_message(bot, chat_id, message)
                 print(f"[{datetime.now()}] Alerta enviada a {chat_id}")
 
+            direction = "subió" if change > 0 else "bajó"
+            push_body = (f"La brecha USDT/$ BCV {direction} de {old_brecha:.2f}% "
+                         f"a {current_brecha:.2f}% ({change:+.2f}%)")
+            await asyncio.to_thread(send_push_to_all, "🚨 Alerta de brecha cambiaria", push_body)
+
             save_last_brecha({
                 "brecha_usdt_usd": current_brecha,
                 "timestamp": data.get("timestamp")
@@ -750,8 +1000,6 @@ async def check_brecha_change(bot):
 async def check_bcv_update(bot):
     """Verifica si el BCV actualizo sus tasas y notifica"""
     subscribers = load_subscribers()
-    if not subscribers:
-        return
 
     try:
         data = get_latest_data()
@@ -794,6 +1042,17 @@ async def check_bcv_update(bot):
             for chat_id in subscribers:
                 await send_telegram_message(bot, chat_id, message)
                 print(f"[{datetime.now()}] Notificacion BCV enviada a {chat_id}")
+
+            push_parts = []
+            for currency, change_info in changes.items():
+                old_val, new_val = change_info['old'], change_info['new']
+                diff_pct = ((new_val - old_val) / old_val * 100) if old_val else 0
+                currency_name = "Dólar" if currency == 'usd' else "Euro"
+                push_parts.append(f"{currency_name}: {old_val:,.2f} → {new_val:,.2f} Bs ({diff_pct:+.2f}%)")
+            push_body = " • ".join(push_parts)
+            if data.get('brecha_usdt_usd') is not None:
+                push_body += f" • Brecha USDT: {data['brecha_usdt_usd']:.2f}%"
+            await asyncio.to_thread(send_push_to_all, "🔔 BCV actualizó sus tasas", push_body)
 
             # Actualizar ultimo BCV
             save_last_bcv({
@@ -1069,6 +1328,19 @@ def get_prices():
 def get_latest():
     latest = load_latest_entry()
     return jsonify(latest if latest else EMPTY_ENTRY)
+
+@app.route('/api/devices', methods=['POST'])
+def register_device():
+    """Registra un dispositivo movil para notificaciones push"""
+    data = request.get_json(silent=True) or {}
+    token = (data.get('token') or '').strip()
+    platform = (data.get('platform') or 'unknown')[:20]
+
+    if not token or len(token) > 4096:
+        return jsonify({"success": False, "error": "token requerido"}), 400
+
+    ok = add_device_token(token, platform)
+    return jsonify({"success": bool(ok)})
 
 @app.route('/api/refresh', methods=['POST'])
 def refresh_prices():

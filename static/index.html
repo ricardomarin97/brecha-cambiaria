@@ -1613,7 +1613,7 @@
 
       async function loadHistory(start = null, end = null, limit = 100) {
         try {
-          let url = "/api/history?limit=" + limit;
+          let url = API_BASE + "/api/history?limit=" + limit;
           if (start) url += "&start=" + encodeURIComponent(start);
           if (end) url += "&end=" + encodeURIComponent(end);
 
@@ -1753,7 +1753,7 @@
 
       async function fetchInBackground() {
         try {
-          const response = await fetch("/api/latest");
+          const response = await fetch(API_BASE + "/api/latest");
           const data = await response.json();
 
           if (data.timestamp) {
@@ -1774,7 +1774,7 @@
 
         try {
           // El servidor actualiza precios cada 60s; basta con pedir el ultimo dato
-          const response = await fetch("/api/latest");
+          const response = await fetch(API_BASE + "/api/latest");
           const data = await response.json();
 
           if (data && data.timestamp) {
@@ -1836,7 +1836,7 @@
           btn.classList.remove("connected", "error");
           btn.classList.add("loading");
 
-          fetch("/api/latest")
+          fetch(API_BASE + "/api/latest")
             .then((response) => response.json())
             .then((data) => {
               if (data.timestamp) {
@@ -1867,6 +1867,10 @@
             });
         }
       }
+
+      // Base de la API: vacia en la web (mismo origen); la app movil
+      // define window.API_BASE con la URL absoluta del servidor
+      const API_BASE = window.API_BASE || "";
 
       // ============== EVENTOS DE ANALYTICS ==============
       const eventosRegistrados = new Set();

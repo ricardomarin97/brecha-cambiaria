@@ -1,0 +1,19 @@
+{
+  "name": "brecha-cambiaria-movil",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App móvil de Brecha Cambiaria Venezuela",
+  "scripts": {
+    "sync-www": "node sync-www.js",
+    "sync": "node sync-www.js && cap sync"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/push-notifications": "^8.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0"
+  }
+}

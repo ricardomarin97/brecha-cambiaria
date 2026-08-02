@@ -8,6 +8,13 @@ env/
 price_history.json
 telegram_subscribers.json
 last_brecha.json
+last_bcv.json
+device_tokens.json
+
+# Credenciales de push (nunca al repo)
+*.p8
+service-account*.json
+firebase-service-account*.json
 *.log
 .DS_Store
 .claude/

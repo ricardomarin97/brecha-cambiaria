@@ -1,0 +1,9 @@
+# Dependencias
+node_modules/
+
+# www/ se genera desde ../static con sync-www.js
+www/
+
+# Secretos de Firebase (se suben a Codemagic, no al repo)
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist

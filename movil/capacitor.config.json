@@ -1,0 +1,10 @@
+{
+  "appId": "com.brechacambiaria.app",
+  "appName": "Brecha Cambiaria",
+  "webDir": "www",
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}
