@@ -1260,6 +1260,10 @@ def sitemap():
 def robots():
     return send_from_directory('static', 'robots.txt')
 
+@app.route('/privacidad')
+def privacidad():
+    return send_from_directory('static', 'privacidad.html')
+
 @app.route('/api/stats')
 def get_stats():
     subscribers = load_subscribers()
