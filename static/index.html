@@ -1134,7 +1134,7 @@
         </div>
         <h3 class="contact-title">Comentarios y Sugerencias</h3>
         <p class="contact-description">¿Tienes ideas para mejorar la app o encontraste algun error? Escríbenos</p>
-        <a href="mailto:ricardoamarinr@gmail.com?subject=Brecha Cambiaria - Comentario" class="contact-btn">
+        <a href="mailto:ricardoamarinr@gmail.com?subject=Brecha Cambiaria - Comentario" class="contact-btn" onclick="track('click_enviar_comentario')">
           <span>Enviar comentario</span>
           <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -1152,6 +1152,7 @@
         class="telegram-btn"
         title="Abrir Bot de Telegram"
         aria-label="Abrir Bot de Telegram"
+        onclick="track('click_telegram_bot')"
       >
         <svg
           viewBox="0 0 24 24"
@@ -1834,6 +1835,21 @@
         }
       }
 
+      // ============== EVENTOS DE ANALYTICS ==============
+      const eventosRegistrados = new Set();
+
+      function track(nombre, params) {
+        if (typeof gtag === "function") gtag("event", nombre, params || {});
+      }
+
+      // Registra el evento una sola vez por visita (para inputs que disparan en cada tecla)
+      function trackOnce(nombre, params) {
+        const clave = nombre + JSON.stringify(params || {});
+        if (eventosRegistrados.has(clave)) return;
+        eventosRegistrados.add(clave);
+        track(nombre, params);
+      }
+
       document.addEventListener("DOMContentLoaded", () => {
         initCharts();
 
@@ -1855,6 +1871,7 @@
         document.querySelectorAll(".calc-currency-btn").forEach((btn) => {
           btn.addEventListener("click", () => {
             const currency = btn.dataset.currency;
+            track("uso_calculadora", { accion: "cambiar_moneda", moneda: currency });
             selectCurrency(currency);
           });
         });
@@ -1862,17 +1879,24 @@
         // Event listener para input de monto
         document
           .getElementById("calcAmount")
-          .addEventListener("input", calculateConversion);
+          .addEventListener("input", () => {
+            trackOnce("uso_calculadora", { accion: "escribir_monto" });
+            calculateConversion();
+          });
 
         // Event listener para input de tasa referencial
         document
           .getElementById("calcRefRate")
-          .addEventListener("input", calculateConversion);
+          .addEventListener("input", () => {
+            trackOnce("uso_calculadora", { accion: "tasa_referencial" });
+            calculateConversion();
+          });
 
         // Event listeners para filtros rapidos
         document.querySelectorAll(".quick-filter-btn").forEach((btn) => {
           btn.addEventListener("click", () => {
             const filter = btn.dataset.filter;
+            track("cambio_filtro", { filtro: filter });
             applyQuickFilter(filter, btn);
           });
         });
@@ -1881,12 +1905,18 @@
         // Event listener para boton de actualizar
         document
           .getElementById("updateBtn")
-          .addEventListener("click", showLatestData);
+          .addEventListener("click", () => {
+            track("click_actualizar");
+            showLatestData();
+          });
 
         // Event listener para boton de compartir
         document
           .getElementById("shareBtn")
-          .addEventListener("click", shareCapture);
+          .addEventListener("click", () => {
+            track("click_compartir");
+            shareCapture();
+          });
 
         // Event listeners para toggle de leyendas
         document.querySelectorAll(".legend-item.clickable").forEach((item) => {
