@@ -1343,6 +1343,17 @@ def register_device():
     ok = add_device_token(token, platform)
     return jsonify({"success": bool(ok)})
 
+@app.route('/api/push-test', methods=['POST'])
+def push_test():
+    """Envia una push de prueba a todos los dispositivos (requiere X-API-Key)"""
+    if not REFRESH_API_KEY or request.headers.get('X-API-Key') != REFRESH_API_KEY:
+        return jsonify({"success": False, "error": "No autorizado"}), 401
+    sent = send_push_to_all(
+        "🔔 Prueba de notificaciones",
+        "Si ves esto, las push de Brecha Cambiaria funcionan correctamente."
+    )
+    return jsonify({"success": True, "sent": sent})
+
 @app.route('/api/refresh', methods=['POST'])
 def refresh_prices():
     if not REFRESH_API_KEY or request.headers.get('X-API-Key') != REFRESH_API_KEY:
