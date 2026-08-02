@@ -1267,6 +1267,7 @@ def get_stats():
 
     return jsonify({
         "subscribers": len(subscribers),
+        "devices": len(load_device_tokens()),
         "total_records": total,
         "oldest_record": oldest,
         "newest_record": newest,
