@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 import warnings
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import json
 import os
@@ -539,6 +539,55 @@ def save_last_bcv(bcv_data):
     """Guarda los ultimos valores del BCV"""
     return _save_setting('last_bcv', bcv_data, 'last_bcv.json')
 
+def load_bcv_seen_values():
+    """Valores del BCV observados recientemente: {'usd': {valor: iso_ts}, 'eur': {...}}"""
+    return _load_setting('bcv_seen_values', 'bcv_seen_values.json') or {}
+
+def save_bcv_seen_values(data):
+    return _save_setting('bcv_seen_values', data, 'bcv_seen_values.json')
+
+BCV_SEEN_TTL_HOURS = 24
+
+def detect_bcv_changes(last_bcv, current_usd, current_eur, seen):
+    """Decide que cambios del BCV ameritan notificar.
+
+    El sitio del BCV alterna entre el valor viejo y el nuevo durante la
+    transicion (cachés desincronizadas), asi que solo se notifica cuando
+    aparece un valor NO visto en las ultimas BCV_SEEN_TTL_HOURS horas.
+    Los rebotes a valores ya conocidos actualizan el estado en silencio.
+
+    Retorna (changes, seen_actualizado). Muta una copia de seen.
+    """
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=BCV_SEEN_TTL_HOURS)
+    now_iso = now.isoformat()
+
+    changes = {}
+    updated_seen = {}
+    for currency, current in (('usd', current_usd), ('eur', current_eur)):
+        currency_seen = dict(seen.get(currency, {}))
+
+        # podar valores fuera de la ventana
+        for key in list(currency_seen.keys()):
+            try:
+                if datetime.fromisoformat(currency_seen[key]) < cutoff:
+                    del currency_seen[key]
+            except Exception:
+                del currency_seen[key]
+
+        if current is not None:
+            key = f"{current:.4f}"
+            old_val = (last_bcv or {}).get(f'bcv_{currency}')
+            is_new_value = key not in currency_seen
+            if old_val is not None and current != old_val and is_new_value:
+                changes[currency] = {'old': old_val, 'new': current}
+            # registrar/refrescar el valor observado
+            currency_seen[key] = now_iso
+
+        updated_seen[currency] = currency_seen
+
+    return changes, updated_seen
+
 # ============== FUNCIONES DE PRECIOS ==============
 
 def get_bcv_prices():
@@ -1010,29 +1059,22 @@ async def check_bcv_update(bot):
             return
 
         last_bcv_data = load_last_bcv()
+        seen = load_bcv_seen_values()
+
+        changes, updated_seen = detect_bcv_changes(last_bcv_data, current_usd, current_eur, seen)
+        save_bcv_seen_values(updated_seen)
+
+        # Rastrear siempre el ultimo valor observado (aunque no se notifique),
+        # para que "anterior -> actual" refleje la transicion real
+        save_last_bcv({
+            "bcv_usd": current_usd,
+            "bcv_eur": current_eur,
+            "timestamp": data.get("timestamp")
+        })
 
         if last_bcv_data is None:
-            # Primera vez, guardar y salir
-            save_last_bcv({
-                "bcv_usd": current_usd,
-                "bcv_eur": current_eur,
-                "timestamp": data.get("timestamp")
-            })
             print(f"[{datetime.now()}] BCV inicial guardado: USD={current_usd}, EUR={current_eur}")
             return
-
-        old_usd = last_bcv_data.get("bcv_usd")
-        old_eur = last_bcv_data.get("bcv_eur")
-
-        changes = {}
-
-        # Verificar cambio en dolar
-        if old_usd and current_usd and old_usd != current_usd:
-            changes['usd'] = {'old': old_usd, 'new': current_usd}
-
-        # Verificar cambio en euro
-        if old_eur and current_eur and old_eur != current_eur:
-            changes['eur'] = {'old': old_eur, 'new': current_eur}
 
         if changes:
             print(f"[{datetime.now()}] Actualizacion BCV detectada: {changes}")
@@ -1053,13 +1095,6 @@ async def check_bcv_update(bot):
             if data.get('brecha_usdt_usd') is not None:
                 push_body += f" • Brecha USDT: {data['brecha_usdt_usd']:.2f}%"
             await asyncio.to_thread(send_push_to_all, "🔔 BCV actualizó sus tasas", push_body)
-
-            # Actualizar ultimo BCV
-            save_last_bcv({
-                "bcv_usd": current_usd,
-                "bcv_eur": current_eur,
-                "timestamp": data.get("timestamp")
-            })
 
     except Exception as e:
         print(f"[{datetime.now()}] Error verificando actualizacion BCV: {e}")
