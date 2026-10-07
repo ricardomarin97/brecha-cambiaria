@@ -615,7 +615,12 @@ def get_bcv_prices():
         print(f"Error obteniendo BCV: {e}")
         return {'usd': None, 'eur': None}
 
-def get_binance_p2p_prices():
+def get_binance_p2p_prices(bcv_usd=None):
+    # Rango de sanidad relativo al BCV (evita que el precio quede fuera de un tope fijo)
+    if bcv_usd:
+        min_price, max_price = bcv_usd * 0.5, bcv_usd * 4
+    else:
+        min_price, max_price = 100, 1_000_000
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
     headers = {
         "Content-Type": "application/json",
@@ -642,7 +647,7 @@ def get_binance_p2p_prices():
                 adv = ad.get("adv", {})
                 price = float(adv.get("price", 0))
                 available = float(adv.get("surplusAmount", 0))
-                if available >= 50 and 300 < price < 1000:
+                if available >= 50 and min_price < price < max_price:
                     results[trade_type.lower()].append({
                         "price": price,
                         "available": available
@@ -661,7 +666,7 @@ def calculate_weighted_average(ads):
 
 def fetch_and_calculate_prices():
     bcv_prices = get_bcv_prices()
-    binance_data = get_binance_p2p_prices()
+    binance_data = get_binance_p2p_prices(bcv_prices['usd'])
 
     buy_avg = calculate_weighted_average(binance_data["buy"])
     sell_avg = calculate_weighted_average(binance_data["sell"])
